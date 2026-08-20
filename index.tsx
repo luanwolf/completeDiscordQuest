@@ -9,8 +9,12 @@ import { findByCodeLazy, findByPropsLazy } from "@webpack";
 import { FluxDispatcher, RestAPI } from "@webpack/common";
 
 import { QuestButton, QuestsCount } from "./components/QuestButton";
+import { nextConsentAction } from "./consent";
 import settings from "./settings";
 import { ChannelStore, GuildChannelStore, QuestsStore, RunningGameStore } from "./stores";
+
+declare const IS_DISCORD_DESKTOP: boolean | undefined;
+declare const IS_VESKTOP: boolean | undefined;
 
 const QuestApplyAction = findByCodeLazy("type:\"QUESTS_ENROLL_BEGIN\"") as (questId: string, action: QuestAction) => Promise<any>;
 const QuestLocationMap = findByPropsLazy("QUEST_HOME_DESKTOP", "11") as Record<string, any>;
@@ -24,19 +28,25 @@ const fakeGames = new Map();
 const fakeApplications = new Map();
 
 const CONSENT_WARNING = [
-    "Important Notice",
+    "Aviso de Risco",
     "",
-    "As of April 7th 2026, Discord has expressed their intent to crack down on automating quest completion.",
+    "Desde 7 de abril de 2026, o Discord aplica sanções a contas que concluem missões via automação.",
+    "O uso é de sua inteira responsabilidade, estando a conta sujeita a restrições.",
     "",
-    "Use this plugin at your own risk, as you may get flagged by doing so.",
-    "",
-    "Press OK to keep using this plugin, or Cancel to keep automation disabled."
+    "Selecione 'OK' para prosseguir ou 'Cancelar' para manter a automação desativada."
 ].join("\n");
+
+function isDiscordDesktop() {
+    return IS_DISCORD_DESKTOP === true || IS_VESKTOP === true || typeof DiscordNative !== "undefined";
+}
 
 export default definePlugin({
     name: "CompleteDiscordQuest",
-    description: "A plugin that completes multiple discord quests in background simultaneously.",
+    description: "Completa várias missões do Discord ao mesmo tempo, em segundo plano.",
     authors: [{
+        name: "heyash",
+        id: 664977206505897984n
+    }, {
         name: "nicola02nb",
         id: 257900031351193600n
     }],
@@ -144,6 +154,7 @@ export default definePlugin({
 
 function isQuestEligibleForFarming(quest: QuestValue): boolean {
     const questConfig = quest.config.taskConfig || quest.config.taskConfigV2;
+    if (!questConfig?.tasks) return false;
     if (!Object.keys(questConfig.tasks).some(taskName => {
         return (taskName === "WATCH_VIDEO" && settings.store.farmVideos
             || taskName === "WATCH_VIDEO_ON_MOBILE" && settings.store.farmVideos
@@ -164,11 +175,22 @@ function isQuestEligibleForFarming(quest: QuestValue): boolean {
 }
 
 function ensureHasAcceptedToUsePlugin(): boolean {
-    if (settings.store.hasAcceptedToUsePlugin === true) {
-        return true;
+    const action = nextConsentAction({
+        hasAccepted: settings.store.hasAcceptedToUsePlugin === true,
+        hasSeen: settings.store.hasSeenConsentWarning === true,
+        armed: settings.store.consentArmed === true,
+    });
+
+    if (action === "farm") return true;
+    if (action === "stop") return false;
+
+    if (action === "arm") {
+        settings.store.consentArmed = true;
+        return false;
     }
 
     const accepted = window.confirm(CONSENT_WARNING);
+    settings.store.hasSeenConsentWarning = true;
     settings.store.hasAcceptedToUsePlugin = accepted;
 
     if (!accepted) {
@@ -202,24 +224,30 @@ function updateQuests() {
             completeQuest(quest);
         }
     }
-    /* console.log("Available quests updated:", availableQuests);
-    console.log("Acceptable quests updated:", acceptableQuests);
-    console.log("Completable quests updated:", completableQuests); */
 }
 
 function acceptQuest(quest: QuestValue) {
     if (!settings.store.acceptQuestsAutomatically) return;
-    console.log("Accepting quest:", quest.config.messages.questName);
-    const action: QuestAction = {
-        questContent: QuestLocationMap.QUEST_HOME_DESKTOP,
-        questContentCTA: "ACCEPT_QUEST",
-        sourceQuestContent: 0,
-    };
-    QuestApplyAction(quest.id, action).then(() => {
-        console.log("Accepted quest:", quest.config.messages.questName);
-    }).catch(err => {
-        console.error("Failed to accept quest:", quest.config.messages.questName, err);
-    });
+    const questName = quest.config.messages.questName;
+    try {
+        if (typeof QuestApplyAction !== "function" || QuestLocationMap?.QUEST_HOME_DESKTOP == null) {
+            console.error("Failed to accept quest:", questName, "enroll action unavailable");
+            return;
+        }
+        console.log("Accepting quest:", questName);
+        const action: QuestAction = {
+            questContent: QuestLocationMap.QUEST_HOME_DESKTOP,
+            questContentCTA: "ACCEPT_QUEST",
+            sourceQuestContent: 0,
+        };
+        QuestApplyAction(quest.id, action).then(() => {
+            console.log("Accepted quest:", questName);
+        }).catch(err => {
+            console.error("Failed to accept quest:", questName, err);
+        });
+    } catch (err) {
+        console.error("Failed to accept quest:", questName, err);
+    }
 }
 
 function stopCompletingAll() {
@@ -246,6 +274,20 @@ function stopAllFarming() {
     }
 }
 
+async function postWithRetry(questId: string, url: string, body: any) {
+    let delay = 5;
+    const maxDelay = 300;
+    while (completingQuest.get(questId)) {
+        try {
+            return await RestAPI.post({ url, body });
+        } catch (err) {
+            console.warn(`Failed to POST to ${url}:`, err);
+            await new Promise(resolve => setTimeout(resolve, delay * 1000));
+            delay = Math.min(delay * 2, maxDelay);
+        }
+    }
+}
+
 function completeQuest(quest: QuestValue) {
     if (!settings.store.hasAcceptedToUsePlugin) {
         stopAllFarming();
@@ -253,140 +295,120 @@ function completeQuest(quest: QuestValue) {
         return;
     }
 
-    const isApp = typeof DiscordNative !== "undefined";
+    const isApp = isDiscordDesktop();
     if (!quest) {
         console.log("You don't have any uncompleted quests!");
-    } else {
-        const pid = Math.floor(Math.random() * 30000) + 1000;
+        return;
+    }
 
-        const applicationId = quest.config.application.id;
-        const applicationName = quest.config.application.name;
-        const { questName } = quest.config.messages;
-        const taskConfig = quest.config.taskConfig ?? quest.config.taskConfigV2;
-        const taskName = ["WATCH_VIDEO", "PLAY_ON_DESKTOP", "STREAM_ON_DESKTOP", "PLAY_ACTIVITY", "WATCH_VIDEO_ON_MOBILE"].find(x => taskConfig.tasks[x] != null);
-        if (!taskName) {
-            console.log("Unknown task type for quest:", questName);
-            return;
-        }
-        const secondsNeeded = taskConfig.tasks[taskName].target;
-        let secondsDone = quest.userStatus?.progress?.[taskName]?.value ?? 0;
+    const pid = Math.floor(Math.random() * 30000) + 1000;
+    const { questName } = quest.config.messages;
+    const taskConfig = quest.config.taskConfig ?? quest.config.taskConfigV2;
+    if (!taskConfig?.tasks) {
+        console.log("Quest has no task configuration:", questName);
+        return;
+    }
 
-        if (!isApp && taskName !== "WATCH_VIDEO" && taskName !== "WATCH_VIDEO_ON_MOBILE") {
-            console.log("This no longer works in browser for non-video quests (" + taskName + "). Use the discord desktop app to complete the", questName, "quest!");
-            return;
-        }
+    const taskName = ["WATCH_VIDEO", "PLAY_ON_DESKTOP", "STREAM_ON_DESKTOP", "PLAY_ACTIVITY", "WATCH_VIDEO_ON_MOBILE"].find(x => taskConfig.tasks[x] != null);
+    if (!taskName) {
+        console.log("Unknown task type for quest:", questName);
+        return;
+    }
 
-        completingQuest.set(quest.id, true);
+    const taskData = taskConfig.tasks[taskName];
+    const applicationId = quest.config.application?.id ?? taskData.applications?.[0]?.id;
+    const applicationName = quest.config.application?.name ?? taskData.applications?.[0]?.name ?? questName;
+    const secondsNeeded = taskData.target;
+    let secondsDone = quest.userStatus?.progress?.[taskName]?.value ?? 0;
 
-        console.log(`Completing quest ${questName} (${quest.id}) - ${taskName} for ${secondsNeeded} seconds.`);
+    if ((taskName === "PLAY_ON_DESKTOP" || taskName === "STREAM_ON_DESKTOP") && !applicationId) {
+        console.error("Quest is missing an application ID:", questName);
+        return;
+    }
 
-        switch (taskName) {
-            case "WATCH_VIDEO":
-            case "WATCH_VIDEO_ON_MOBILE":
-                const maxFuture = 10, speed = 7, interval = 1;
-                const enrolledAt = new Date(quest.userStatus.enrolledAt).getTime();
-                let completed = false;
-                const watchVideo = async () => {
-                    while (true) {
-                        const maxAllowed = Math.floor((Date.now() - enrolledAt) / 1000) + maxFuture;
-                        const diff = maxAllowed - secondsDone;
-                        const timestamp = secondsDone + speed;
+    if (!isApp && taskName !== "WATCH_VIDEO" && taskName !== "WATCH_VIDEO_ON_MOBILE") {
+        console.log("This no longer works in browser for non-video quests (" + taskName + "). Use the discord desktop app to complete the", questName, "quest!");
+        return;
+    }
 
-                        if (!completingQuest.get(quest.id)) {
-                            console.log("Stopping completing quest:", questName);
-                            completingQuest.set(quest.id, false);
-                            break;
-                        }
+    completingQuest.set(quest.id, true);
 
-                        if (diff >= speed) {
-                            const res = await RestAPI.post({ url: `/quests/${quest.id}/video-progress`, body: { timestamp: Math.min(secondsNeeded, timestamp + Math.random()) } });
-                            completed = res.body.completed_at != null;
-                            secondsDone = Math.min(secondsNeeded, timestamp);
-                        }
+    console.log(`Completing quest ${questName} (${quest.id}) - ${taskName} for ${secondsNeeded} seconds.`);
 
-                        if (timestamp >= secondsNeeded) {
-                            completingQuest.set(quest.id, false);
-                            break;
-                        }
-                        await new Promise(resolve => setTimeout(resolve, interval * 1000));
+    switch (taskName) {
+        case "WATCH_VIDEO":
+        case "WATCH_VIDEO_ON_MOBILE":
+            const speed = 7;
+            let completed = false;
+            const watchVideo = async () => {
+                while (secondsDone < secondsNeeded) {
+                    if (!completingQuest.get(quest.id)) {
+                        console.log("Stopping completing quest:", questName);
+                        completingQuest.set(quest.id, false);
+                        return;
                     }
-                    if (!completed) {
-                        await RestAPI.post({ url: `/quests/${quest.id}/video-progress`, body: { timestamp: secondsNeeded } });
+
+                    const remaining = Math.min(speed, secondsNeeded - secondsDone);
+                    await new Promise(resolve => setTimeout(resolve, remaining * 1000));
+
+                    if (!completingQuest.get(quest.id)) {
+                        console.log("Stopping completing quest:", questName);
+                        completingQuest.set(quest.id, false);
+                        return;
                     }
-                    console.log("Quest completed!");
-                };
-                watchVideo();
-                console.log(`Spoofing video for ${questName}.`);
-                break;
 
-            case "PLAY_ON_DESKTOP":
-                RestAPI.get({ url: `/applications/public?application_ids=${applicationId}` }).then(res => {
-                    const appData = res.body[0];
-                    const exeName = appData.executables?.find(x => x.os === "win32")?.name?.replace(">","") ?? appData.name.replace(/[\/\\:*?"<>|]/g, "");
+                    const timestamp = secondsDone + speed;
+                    const res = await postWithRetry(quest.id, `/quests/${quest.id}/video-progress`, { timestamp: Math.min(secondsNeeded, timestamp + Math.random()) });
+                    if (!res) break;
+                    completed = res.body.completed_at != null;
+                    secondsDone = Math.min(secondsNeeded, timestamp);
+                }
+                if (!completed && completingQuest.get(quest.id)) {
+                    await postWithRetry(quest.id, `/quests/${quest.id}/video-progress`, { timestamp: secondsNeeded });
+                }
+                completingQuest.set(quest.id, false);
+                console.log("Quest completed!");
+            };
+            watchVideo();
+            console.log(`Spoofing video for ${questName}.`);
+            break;
 
-                    const fakeGame = {
-                        cmdLine: `C:\\Program Files\\${appData.name}\\${exeName}`,
-                        exeName,
-                        exePath: `c:/program files/${appData.name.toLowerCase()}/${exeName}`,
-                        hidden: false,
-                        isLauncher: false,
-                        id: applicationId,
-                        name: appData.name,
-                        pid: pid,
-                        pidPath: [pid],
-                        processName: appData.name,
-                        start: Date.now(),
-                    };
-                    const realGames = fakeGames.size === 0 ? RunningGameStore.getRunningGames() : [];
-                    fakeGames.set(quest.id, fakeGame);
-                    const fakeGames2 = Array.from(fakeGames.values());
-                    FluxDispatcher.dispatch({ type: "RUNNING_GAMES_CHANGE", removed: realGames, added: [fakeGame], games: fakeGames2 });
+        case "PLAY_ON_DESKTOP":
+            RestAPI.get({ url: `/applications/public?application_ids=${applicationId}` }).then(res => {
+                const appData = res.body[0];
+                const exeName = appData.executables?.find(x => x.os === "win32")?.name?.replace(">","") ?? appData.name.replace(/[\/\\:*?"<>|]/g, "");
 
-                    const playOnDesktop = event => {
-                        if (event.questId !== quest.id) return;
-                        const progress = quest.config.configVersion === 1 ? event.userStatus.streamProgressSeconds : Math.floor(event.userStatus.progress.PLAY_ON_DESKTOP.value);
-                        console.log(`Quest progress ${questName}: ${progress}/${secondsNeeded}`);
-
-                        if (!completingQuest.get(quest.id) || progress >= secondsNeeded) {
-                            console.log("Stopping completing quest:", questName);
-
-                            fakeGames.delete(quest.id);
-                            const games = RunningGameStore.getRunningGames();
-                            const added = fakeGames.size === 0 ? games : [];
-                            FluxDispatcher.dispatch({ type: "RUNNING_GAMES_CHANGE", removed: [fakeGame], added: added, games: games });
-                            FluxDispatcher.unsubscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", playOnDesktop);
-
-                            if (progress >= secondsNeeded) {
-                                console.log("Quest completed!");
-                                completingQuest.set(quest.id, false);
-                            }
-                        }
-                    };
-                    FluxDispatcher.subscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", playOnDesktop);
-
-                    console.log(`Spoofed your game to ${applicationName}. Wait for ${Math.ceil((secondsNeeded - secondsDone) / 60)} more minutes.`);
-                });
-                break;
-
-            case "STREAM_ON_DESKTOP":
-                const fakeApp = {
+                const fakeGame = {
+                    cmdLine: `C:\\Program Files\\${appData.name}\\${exeName}`,
+                    exeName,
+                    exePath: `c:/program files/${appData.name.toLowerCase()}/${exeName}`,
+                    hidden: false,
+                    isLauncher: false,
                     id: applicationId,
-                    name: `FakeApp ${applicationName} (CompleteDiscordQuest)`,
+                    name: appData.name,
                     pid: pid,
-                    sourceName: null,
+                    pidPath: [pid],
+                    processName: appData.name,
+                    start: Date.now(),
                 };
-                fakeApplications.set(quest.id, fakeApp);
+                const realGames = fakeGames.size === 0 ? RunningGameStore.getRunningGames() : [];
+                fakeGames.set(quest.id, fakeGame);
+                const fakeGames2 = Array.from(fakeGames.values());
+                FluxDispatcher.dispatch({ type: "RUNNING_GAMES_CHANGE", removed: realGames, added: [fakeGame], games: fakeGames2 });
 
-                const streamOnDesktop = event => {
+                const playOnDesktop = event => {
                     if (event.questId !== quest.id) return;
-                    const progress = quest.config.configVersion === 1 ? event.userStatus.streamProgressSeconds : Math.floor(event.userStatus.progress.STREAM_ON_DESKTOP.value);
+                    const progress = quest.config.configVersion === 1 ? event.userStatus.streamProgressSeconds : Math.floor(event.userStatus.progress.PLAY_ON_DESKTOP.value);
                     console.log(`Quest progress ${questName}: ${progress}/${secondsNeeded}`);
 
                     if (!completingQuest.get(quest.id) || progress >= secondsNeeded) {
                         console.log("Stopping completing quest:", questName);
 
-                        fakeApplications.delete(quest.id);
-                        FluxDispatcher.unsubscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", streamOnDesktop);
+                        fakeGames.delete(quest.id);
+                        const games = RunningGameStore.getRunningGames();
+                        const added = fakeGames.size === 0 ? games : [];
+                        FluxDispatcher.dispatch({ type: "RUNNING_GAMES_CHANGE", removed: [fakeGame], added: added, games: games });
+                        FluxDispatcher.unsubscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", playOnDesktop);
 
                         if (progress >= secondsNeeded) {
                             console.log("Quest completed!");
@@ -394,45 +416,76 @@ function completeQuest(quest: QuestValue) {
                         }
                     }
                 };
-                FluxDispatcher.subscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", streamOnDesktop);
+                FluxDispatcher.subscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", playOnDesktop);
 
-                console.log(`Spoofed your stream to ${applicationName}. Stream any window in vc for ${Math.ceil((secondsNeeded - secondsDone) / 60)} more minutes.`);
-                console.log("Remember that you need at least 1 other person to be in the vc!");
-                break;
+                console.log(`Spoofed your game to ${applicationName}. Wait for ${Math.ceil((secondsNeeded - secondsDone) / 60)} more minutes.`);
+            });
+            break;
 
-            case "PLAY_ACTIVITY":
-                const channelId = ChannelStore.getSortedPrivateChannels()[0]?.id ?? Object.values(GuildChannelStore.getAllGuilds()).find(x => x != null && x.VOCAL.length > 0).VOCAL[0].channel.id;
-                const streamKey = `call:${channelId}:1`;
+        case "STREAM_ON_DESKTOP":
+            const fakeApp = {
+                id: applicationId,
+                pid: pid,
+                sourceName: null,
+            };
+            fakeApplications.set(quest.id, fakeApp);
 
-                const playActivity = async () => {
-                    console.log("Completing quest", questName, "-", quest.config.messages.questName);
+            const streamOnDesktop = event => {
+                if (event.questId !== quest.id) return;
+                const progress = quest.config.configVersion === 1 ? event.userStatus.streamProgressSeconds : Math.floor(event.userStatus.progress.STREAM_ON_DESKTOP.value);
+                console.log(`Quest progress ${questName}: ${progress}/${secondsNeeded}`);
 
-                    while (true) {
-                        const res = await RestAPI.post({ url: `/quests/${quest.id}/heartbeat`, body: { stream_key: streamKey, terminal: false } });
-                        const progress = res.body.progress.PLAY_ACTIVITY.value;
-                        console.log(`Quest progress ${questName}: ${progress}/${secondsNeeded}`);
+                if (!completingQuest.get(quest.id) || progress >= secondsNeeded) {
+                    console.log("Stopping completing quest:", questName);
 
-                        await new Promise(resolve => setTimeout(resolve, 20 * 1000));
+                    fakeApplications.delete(quest.id);
+                    FluxDispatcher.unsubscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", streamOnDesktop);
 
-                        if (!completingQuest.get(quest.id) || progress >= secondsNeeded) {
-                            console.log("Stopping completing quest:", questName);
-
-                            if (progress >= secondsNeeded) {
-                                await RestAPI.post({ url: `/quests/${quest.id}/heartbeat`, body: { stream_key: streamKey, terminal: true } });
-                                console.log("Quest completed!");
-                                completingQuest.set(quest.id, false);
-                            }
-                            break;
-                        }
+                    if (progress >= secondsNeeded) {
+                        console.log("Quest completed!");
+                        completingQuest.set(quest.id, false);
                     }
-                };
-                playActivity();
-                break;
+                }
+            };
+            FluxDispatcher.subscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", streamOnDesktop);
 
-            default:
-                console.error("Unknown task type:", taskName);
-                completingQuest.set(quest.id, false);
-                break;
-        }
+            console.log(`Spoofed your stream to ${applicationName}. Stream any window in vc for ${Math.ceil((secondsNeeded - secondsDone) / 60)} more minutes.`);
+            console.log("Remember that you need at least 1 other person to be in the vc!");
+            break;
+
+        case "PLAY_ACTIVITY":
+            const channelId = ChannelStore.getSortedPrivateChannels()[0]?.id ?? Object.values(GuildChannelStore.getAllGuilds()).find(x => x != null && x.VOCAL.length > 0).VOCAL[0].channel.id;
+            const streamKey = `call:${channelId}:1`;
+
+            const playActivity = async () => {
+                console.log("Completing quest", questName, "-", quest.config.messages.questName);
+
+                while (true) {
+                    const res = await postWithRetry(quest.id, `/quests/${quest.id}/heartbeat`, { stream_key: streamKey, terminal: false });
+                    if (!res) break;
+                    const progress = res.body.progress.PLAY_ACTIVITY.value;
+                    console.log(`Quest progress ${questName}: ${progress}/${secondsNeeded}`);
+
+                    await new Promise(resolve => setTimeout(resolve, 20 * 1000));
+
+                    if (!completingQuest.get(quest.id) || progress >= secondsNeeded) {
+                        console.log("Stopping completing quest:", questName);
+
+                        if (progress >= secondsNeeded) {
+                            await postWithRetry(quest.id, `/quests/${quest.id}/heartbeat`, { stream_key: streamKey, terminal: true });
+                            console.log("Quest completed!");
+                            completingQuest.set(quest.id, false);
+                        }
+                        break;
+                    }
+                }
+            };
+            playActivity();
+            break;
+
+        default:
+            console.error("Unknown task type:", taskName);
+            completingQuest.set(quest.id, false);
+            break;
     }
 }

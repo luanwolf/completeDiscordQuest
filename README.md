@@ -1,25 +1,42 @@
 > [!CAUTION]
-> As of April 7th 2026, Discord has expressed their intent to crack down on automating quest completion.
+> Desde 7 de abril de 2026 o Discord passou a punir quem completa missões automaticamente.
 >
-> Some users have received the following system message:
+> Alguns usuários receberam este aviso:
 >
-> <img width="836" height="272" alt="574947159-6b439f4b-4381-4524-8540-b6a4777a80d0" src="https://github.com/user-attachments/assets/db4c7641-dd57-412e-a625-f39a363f2138" />
+> <img width="836" height="272" alt="aviso do Discord sobre automação de missões" src="https://github.com/user-attachments/assets/db4c7641-dd57-412e-a625-f39a363f2138" />
 >
-> There isn't much I can do to make the script undetected, so use it at your own risk, as you most likely WILL get flagged by doing so.
+> Não tem como deixar o plugin indetectável. Use por sua conta e risco. Sua conta provavelmente vai ser marcada.
 
-# CompleteDiscordQuest for Vencord
+# CompleteDiscordQuest para Vencord
 
-This is a porting of the original BetterDiscord(BD) plugin [CompleteDiscordQuest](https://github.com/nicola02nb/BetterDiscord-Stuff/tree/main/Plugins/CompleteDiscordQuest).
+Plugin do Vencord que completa várias missões do Discord ao mesmo tempo, em segundo plano.
 
-A Vencord(VC) plugin that completes you multiple discord quests in background simultaneously.
+Port do plugin de BetterDiscord [CompleteDiscordQuest](https://github.com/nicola02nb/BetterDiscord-Stuff/tree/main/Plugins/CompleteDiscordQuest).
 
-## Credits:
+## Instalação
 
-This is a porting for BetterDiscord of a [snippet](https://gist.github.com/aamiaa/204cd9d42013ded9faf646fae7f89fbb) made by [aamiaa](https://github.com/aamiaa).
+1. Instale o [Vencord](https://vencord.dev/) a partir do código fonte.
+2. Clone este repositório em `Vencord/src/userplugins`:
 
-## Features:
+```bash
+cd Vencord/src/userplugins
+git clone https://github.com/luanwolf/completeDiscordQuest.git
+```
 
-- One-time consent prompt before automation starts
-- Auto enroll quests
-- Set which type of quest can be farmed
-- Set which type of reward can be farmed
+3. Reinjete o Vencord (`pnpm inject` na pasta do Vencord) e reinicie o Discord.
+4. Ative o plugin em Configurações do Vencord > Plugins.
+
+Na primeira reinicialização depois de ativar, aparece um aviso de risco. OK liga a automação. Cancelar deixa desligada (você pode ligar depois nas opções do plugin).
+
+## O que faz
+
+- Aceita missões sozinho (opcional)
+- Completa vídeo, jogar no app, transmitir e atividade
+- Filtra por tipo de missão e de recompensa
+- Botão de missões na barra de cima e no card do usuário (mudo, fone, configurações)
+
+## Créditos
+
+- Trecho original: [aamiaa](https://github.com/aamiaa)
+- Port Vencord: [nicola02nb](https://github.com/nicola02nb/completeDiscordQuest)
+- Esta versão: **heyash**

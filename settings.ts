@@ -10,74 +10,100 @@ import { OptionType } from "@utils/types";
 export default definePluginSettings({
     hasAcceptedToUsePlugin: {
         type: OptionType.BOOLEAN,
-        description: "Required consent for running quest automation. Disable to force-stop quest farming.",
+        displayName: "Permitir automação",
+        description: "Permitir completar missões automaticamente. Desligue para parar.",
         default: false
+    },
+    hasSeenConsentWarning: {
+        type: OptionType.BOOLEAN,
+        description: "Aviso de risco já foi mostrado.",
+        default: false,
+        hidden: true
+    },
+    consentArmed: {
+        type: OptionType.BOOLEAN,
+        description: "Aviso de risco aguardando o primeiro reinício.",
+        default: false,
+        hidden: true
     },
     acceptQuestsAutomatically: {
         type: OptionType.BOOLEAN,
-        description: "Whether to accept available quests automatically.",
+        displayName: "Aceitar missões sozinho",
+        description: "Aceitar missões disponíveis sozinho.",
         default: false
     },
     showQuestsButtonTopBar: {
         type: OptionType.BOOLEAN,
-        description: "Whether to show the quests button in the top bar.",
+        displayName: "Botão na barra de cima",
+        description: "Mostrar o botão de missões na barra de cima.",
         default: true,
         restartNeeded: true
     },
     showQuestsButtonSettingsBar: {
         type: OptionType.BOOLEAN,
-        description: "Whether to show the quests button in the settings bar.",
+        displayName: "Botão no card do usuário",
+        description: "Mostrar o botão de missões no card do usuário (mudo, fone, configurações).",
         default: false,
         restartNeeded: true
     },
     showQuestsButtonBadges: {
         type: OptionType.BOOLEAN,
-        description: "Whether to show badges on the quests button.",
+        displayName: "Contadores no botão",
+        description: "Mostrar contadores no botão de missões.",
         default: true
     },
     farmVideos: {
         type: OptionType.BOOLEAN,
-        description: "Whether to farm video quests automatically.",
+        displayName: "Missões de vídeo",
+        description: "Completar missões de vídeo.",
         default: true
     },
     farmPlayOnDesktop: {
         type: OptionType.BOOLEAN,
-        description: "Whether to farm play on desktop quests automatically.",
+        displayName: "Missões de jogar no app",
+        description: "Completar missões de jogar no app.",
         default: true
     },
     farmStreamOnDesktop: {
         type: OptionType.BOOLEAN,
-        description: "Whether to farm stream on desktop quests automatically.",
+        displayName: "Missões de transmitir",
+        description: "Completar missões de transmitir.",
         default: true
     },
     farmPlayActivity: {
         type: OptionType.BOOLEAN,
-        description: "Whether to farm play activity quests automatically.",
+        displayName: "Missões de atividade",
+        description: "Completar missões de atividade.",
         default: true
     },
     farmRewardCodes: {
         type: OptionType.BOOLEAN,
-        description: "Whether to farm reward code quests automatically.",
+        displayName: "Recompensa: código",
+        description: "Aceitar missões que dão código de resgate.",
         default: true
     },
     farmInGame: {
         type: OptionType.BOOLEAN,
-        description: "Whether to farm in-game quests automatically.",
+        displayName: "Recompensa: no jogo",
+        description: "Aceitar missões que dão recompensa no jogo.",
         default: true
     },
     farmCollectibles: {
         type: OptionType.BOOLEAN,
-        description: "Whether to farm collectible quests automatically.",
+        displayName: "Recompensa: colecionável",
+        description: "Aceitar missões que dão colecionável.",
         default: true
     },
     farmVirtualCurrency: {
         type: OptionType.BOOLEAN,
-        description: "Whether to farm virtual currency quests automatically.",
+        displayName: "Recompensa: orbs",
+        description: "Aceitar missões que dão orbs.",
         default: true
     },
     farmFractionalPremium: {
         type: OptionType.BOOLEAN,
-        description: "Whether to farm fractional premium quests automatically.",
+        displayName: "Recompensa: Nitro fracionado",
+        description: "Aceitar missões que dão Nitro fracionado.",
         default: true
     },
 });

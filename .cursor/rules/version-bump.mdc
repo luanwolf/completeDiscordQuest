@@ -1,0 +1,36 @@
+---
+description: Sempre que mudar um app shippável, subir +1 no patch da versão (package.json + UI).
+alwaysApply: true
+---
+
+# Version bump (patch +1)
+
+Sempre que o trabalho alterar algo **shippável** de um app (código, assets, copy na UI, config de deploy daquele app), **suba 1 nível de patch** nesse app **no mesmo diff**, antes do commit — não espere o usuário lembrar.
+
+## O que bumpa
+
+| App | `package.json` | Constante na UI (manter sync) |
+|-----|----------------|-------------------------------|
+| Fichas | `apps/fichas/package.json` | `FICHAS_VERSION` em `AuthScreen.tsx` (`v1.x.y`) |
+| Escudo | `apps/escudo/package.json` | `ESCUDO_VERSION` em `LoginScreen.tsx` (`v.1.x.y`) + `strings.ts` se existir |
+| Música | `apps/musica/package.json` | `MUSICA_VERSION` em `App.tsx` (`v.x.y.z`) |
+| Hub | `apps/hub/package.json` | (só package.json) |
+| Cartas / catálogos | respectivo `package.json` | (só package.json, se existir UI de versão, sync) |
+
+Exemplos: `1.0.5` → `1.0.6`. Só patch (`z` em `x.y.z`), salvo pedido explícito de minor/major.
+
+## Regras
+
+- Bumpe **só os apps tocados** neste change set (não o monorepo inteiro).
+- **Um +1 por entrega/commit** daquele app — não +N por arquivo.
+- Se o commit só muda regra Cursor / doc interna / script local que não vai pro usuário → **não** bumpa.
+- Mudança só em `packages/brand` ou `packages/catalog` que afeta apps: bumpa os apps que de fato mudam comportamento/UI visível; se duvidar, bumpa Hub + apps que importam o pacote e foram re-testados.
+- Nunca deixe `package.json` e a const da tela de login dessincronizados.
+- Inclua o bump no **mesmo commit** da feature/fix (não um commit só de versão, a menos que o usuário peça só isso).
+
+## Checklist rápido antes do commit
+
+1. Quais `apps/*` entraram no diff?
+2. Patch +1 no `package.json` de cada um.
+3. Constante de versão na UI, se houver.
+4. Segue o commit normalmente.

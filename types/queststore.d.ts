@@ -104,6 +104,7 @@ interface Tasks {
 interface PLAYONDESKTOP {
     type: string;
     target: number;
+    applications?: { id: string; name?: string }[];
 }
 
 interface Messages {

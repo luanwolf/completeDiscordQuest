@@ -7,16 +7,19 @@
 import "./QuestButton.css";
 
 import { Flex } from "@components/Flex";
-import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy } from "@webpack";
-import { Tooltip, useEffect, useState } from "@webpack/common";
+import { findByCodeLazy, findComponentByCodeLazy } from "@webpack";
+import { NavigationRouter, Tooltip, useEffect, useState } from "@webpack/common";
 
 import { QuestsStore } from "../stores";
 
 const QuestIcon = findByCodeLazy("\"M7.5 21.7a8.95");
-const { navigateToQuestHome } = findByPropsLazy("navigateToQuestHome");
 const TopBarButton = findComponentByCodeLazy("badgePosition", "icon");
 const SettingsBarButton = findComponentByCodeLazy("keyboardShortcut", "positionKey");
 const CountBadge = findComponentByCodeLazy("renderBadgeCount", "disableColor");
+
+function openQuestHome() {
+    NavigationRouter.transitionTo("/quest-home");
+}
 
 function questsStatus() {
     const availableQuests = [...QuestsStore.quests.values()];
@@ -53,7 +56,7 @@ export function QuestsCount() {
     return (
         <Flex flexDirection={"row"} justifyContent={"flex-end"} className={"quest-button-badges"} gap={"5px"}>
             {status.enrollable > 0 && (
-                <Tooltip text={"Enrollable"}>
+                <Tooltip text={"Para aceitar"}>
                     {({ onMouseEnter, onMouseLeave }) => (
                         <CountBadge
                             onMouseEnter={onMouseEnter}
@@ -66,7 +69,7 @@ export function QuestsCount() {
                 </Tooltip>
             )}
             {status.enrolled > 0 && (
-                <Tooltip text={"Enrolled"}>
+                <Tooltip text={"Em andamento"}>
                     {({ onMouseEnter, onMouseLeave }) => (
                         <CountBadge
                             onMouseEnter={onMouseEnter}
@@ -79,7 +82,7 @@ export function QuestsCount() {
                 </Tooltip>
             )}
             {status.claimable > 0 && (
-                <Tooltip text={"Claimable"}>
+                <Tooltip text={"Para resgatar"}>
                     {({ onMouseEnter, onMouseLeave }) => (
                         <CountBadge
                             onMouseEnter={onMouseEnter}
@@ -92,7 +95,7 @@ export function QuestsCount() {
                 </Tooltip>
             )}
             {status.claimed > 0 && (
-                <Tooltip text={"Claimed"}>
+                <Tooltip text={"Resgatadas"}>
                     {({ onMouseEnter, onMouseLeave }) => (
                         <CountBadge
                             onMouseEnter={onMouseEnter}
@@ -123,18 +126,18 @@ export function QuestButton({ type }: { type: "top-bar" | "settings-bar"; }) {
     }, []);
 
     const className = state.enrollable ? "quest-button-enrollable" : state.enrolled ? "quest-button-enrolled" : state.claimable ? "quest-button-claimable" : "";
-    const tooltip = state.enrollable ? `${state.enrollable} Enrollable Quests` : state.enrolled ? `${state.enrolled} Enrolled Quests` : state.claimable ? `${state.claimable} Claimable Quests` : "Quests";
+    const tooltip = state.enrollable ? `${state.enrollable} para aceitar` : state.enrolled ? `${state.enrolled} em andamento` : state.claimable ? `${state.claimable} para resgatar` : "Missões";
     if (type === "top-bar") {
         return (
             <TopBarButton
                 className={className}
                 iconClassName={undefined}
-                disabled={navigateToQuestHome === undefined}
+                disabled={false}
                 showBadge={state.enrollable > 0 || state.enrolled > 0 || state.claimable > 0}
                 badgePosition={"bottom"}
                 icon={QuestIcon}
                 iconSize={20}
-                onClick={navigateToQuestHome}
+                onClick={openQuestHome}
                 onContextMenu={undefined}
                 tooltip={tooltip}
                 tooltipPosition={"bottom"}
@@ -146,19 +149,19 @@ export function QuestButton({ type }: { type: "top-bar" | "settings-bar"; }) {
             <SettingsBarButton
                 tooltipText={tooltip}
                 onContextMenu={undefined}
-                onClick={navigateToQuestHome}
-                disabled={navigateToQuestHome === undefined}
+                onClick={openQuestHome}
+                disabled={false}
                 icon={undefined}
                 className={"quest-button"}
             ><TopBarButton
                     className={className}
                     iconClassName={undefined}
-                    disabled={navigateToQuestHome === undefined}
+                    disabled={false}
                     showBadge={state.enrollable > 0 || state.enrolled > 0 || state.claimable > 0}
                     badgePosition={"bottom"}
                     icon={QuestIcon}
                     iconSize={20}
-                    onClick={navigateToQuestHome}
+                    onClick={openQuestHome}
                     onContextMenu={undefined}
                     hideOnClick={false}
                 /></SettingsBarButton>
