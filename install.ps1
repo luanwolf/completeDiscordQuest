@@ -480,11 +480,11 @@ function Test-GitDirty([string]$Dest) {
     finally { $ErrorActionPreference = $old }
 }
 
-function Get-GitHead([string]$Dest) {
+function Get-GitHead([string]$Dest, [string]$Rev = 'HEAD') {
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $h = & (Resolve-Native 'git') -C $Dest rev-parse HEAD 2>$null
+        $h = & (Resolve-Native 'git') -C $Dest rev-parse $Rev 2>$null
         if ($LASTEXITCODE) { return '' }
         return ("$h").Trim()
     } catch { return '' }
@@ -519,14 +519,39 @@ function Ensure-Repo([string]$Url, [string]$Dest, [switch]$NoPull) {
                 Write-Warn "git fetch falhou — reusando o que ja esta em $Dest"
                 return
             }
-            & $git -C $Dest reset --hard FETCH_HEAD
-            if ($LASTEXITCODE) {
-                Write-Warn "git reset falhou — reusando o que ja esta em $Dest"
-                return
+            $resetOk = $false
+            foreach ($try in 1..3) {
+                & $git -C $Dest reset --hard FETCH_HEAD
+                if (-not $LASTEXITCODE) { $resetOk = $true; break }
+                Start-Sleep -Milliseconds 400
             }
-            & $git -C $Dest clean -fd
+            if (-not $resetOk) {
+                Write-Warn "git reset falhou — overlay a partir de clone temporario"
+                $tmp = Join-Path $env:TEMP ("cdq-overlay-" + [guid]::NewGuid().ToString('N'))
+                try {
+                    & $git clone --depth 1 $Url $tmp
+                    if ($LASTEXITCODE) {
+                        Write-Warn "overlay falhou — reusando o que ja esta em $Dest"
+                        return
+                    }
+                    $robo = Join-Path $env:SystemRoot 'System32\robocopy.exe'
+                    if (-not (Test-Path -LiteralPath $robo)) { $robo = 'robocopy' }
+                    & $robo $tmp $Dest /E /XD .git /R:1 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP
+                    if ($LASTEXITCODE -ge 8) { Write-Warn "overlay parcial — alguns arquivos nao copiaram" }
+                    & $git -C $Dest update-ref HEAD FETCH_HEAD
+                } finally {
+                    if (Test-Path -LiteralPath $tmp) {
+                        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                }
+            } else {
+                & $git -C $Dest clean -fd
+            }
         } finally { $ErrorActionPreference = $old }
-        if ($before -ne (Get-GitHead $Dest)) { $script:RepoUpdated = $true }
+        $after = Get-GitHead $Dest
+        $want = Get-GitHead $Dest 'FETCH_HEAD'
+        if (-not $want) { $want = Get-GitHead $Dest 'origin/main' }
+        if ($before -ne $after -or ($after -and $want -and $after -ne $want)) { $script:RepoUpdated = $true }
         Write-Ok 'repositorio atualizado'
         return
     }
@@ -686,12 +711,16 @@ function Invoke-Install {
     Ensure-Repo $PluginRepo $pluginDest
 
     $dist = Join-Path $root 'dist\vencordDesktopRenderer.js'
-    if (-not $script:RepoUpdated -and (Test-Path -LiteralPath $dist)) {
+    $localSha = Get-GitHead $pluginDest
+    $wantSha = Get-GitHead $pluginDest 'FETCH_HEAD'
+    if (-not $wantSha) { $wantSha = Get-GitHead $pluginDest 'origin/main' }
+    if (-not $script:RepoUpdated -and $localSha -and $wantSha -and $localSha -eq $wantSha -and (Test-Path -LiteralPath $dist)) {
         Save-InstallState $root $pluginDest
         Set-PluginEnabled $root
         Write-Ok 'plugin ja esta na versao do GitHub'
         Write-Host ''
         Write-Ok 'Pronto. Nada novo pra instalar.'
+        if ($Yes) { Start-Discord }
         return
     }
 

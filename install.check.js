@@ -37,6 +37,10 @@ assert.match(src, /alinhando com o GitHub/);
 assert.match(src, /fetch --depth 1 origin main/);
 assert.match(src, /reset --hard FETCH_HEAD/);
 assert.match(src, /git fetch falhou/);
+assert.match(src, /update-ref HEAD FETCH_HEAD/);
+assert.match(src, /robocopy/);
+assert.match(src, /\$localSha -eq \$wantSha/);
+assert.match(src, /if \(\$Yes\) \{ Start-Discord \}/);
 assert.doesNotMatch(src, /sem git pull"/);
 assert.equal((src.match(/\$MinNodeMajor = 22/) || []).length, 1);
 

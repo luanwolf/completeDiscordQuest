@@ -6,7 +6,7 @@
 
 import { spawn } from "child_process";
 import { IpcMainInvokeEvent } from "electron";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { request } from "https";
 import { join, resolve } from "path";
 
@@ -137,34 +137,39 @@ export function applyUpdate(_event: IpcMainInvokeEvent) {
     if (!existsSync(script)) return false;
     const dir = dataDir();
     mkdirSync(dir, { recursive: true });
+    const copied = join(dir, "install.ps1");
+    copyFileSync(script, copied);
     const ps = join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+    const cmd = join(process.env.SystemRoot || "C:\\Windows", "System32", "cmd.exe");
     const log = join(dir, "update.log");
     writeFileSync(log, `[${new Date().toISOString()}] launch\n`, { flag: "a" });
     const launcher = join(dir, "run-update.ps1");
     const q = (s: string) => "'" + s.replace(/'/g, "''") + "'";
     writeFileSync(launcher, [
         `$log = ${q(log)}`,
-        "Start-Transcript -Path $log -Append | Out-Null",
+        "Add-Content -LiteralPath $log -Value (\"[{0}] pid={1} start\" -f (Get-Date).ToString('o'), $PID)",
+        "try { Start-Transcript -Path $log -Append | Out-Null } catch { Add-Content -LiteralPath $log -Value (\"[{0}] transcript-fail {1}\" -f (Get-Date).ToString('o'), $_) }",
         "$ErrorActionPreference = 'Stop'",
         "$env:CDQ_YES = '1'",
         `$env:VENCORD_DIR = ${q(root)}`,
         "try {",
-        `  Get-Content -LiteralPath ${q(script)} -Raw -Encoding UTF8 | Invoke-Expression`,
+        `  Get-Content -LiteralPath ${q(copied)} -Raw -Encoding UTF8 | Invoke-Expression`,
         "} catch {",
+        "  Add-Content -LiteralPath $log -Value (\"[{0}] catch {1}\" -f (Get-Date).ToString('o'), $_)",
         "  Write-Host $_",
         "  Write-Host $_.ScriptStackTrace",
         "  throw",
-        "} finally { Stop-Transcript | Out-Null }",
+        "} finally { try { Stop-Transcript | Out-Null } catch {} }",
     ].join("\r\n"), "ascii");
-    const child = spawn(ps, [
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-File", launcher
+    // cmd start escapes Electron's job object so PowerShell stays alive after Discord exits
+    const child = spawn(cmd, [
+        "/c",
+        `start "CDQUpdate" /min "${ps}" -NoProfile -ExecutionPolicy Bypass -File "${launcher}"`
     ], {
         detached: true,
-        stdio: ["ignore", "ignore", "ignore"],
+        stdio: "ignore",
         windowsHide: true,
-        cwd: root,
+        cwd: dir,
         env: spawnEnv(root)
     });
     child.unref();

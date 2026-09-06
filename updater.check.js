@@ -16,6 +16,12 @@ assert.match(native, /run-update\.ps1/);
 assert.match(native, /Encoding UTF8/);
 assert.match(native, /CDQ_YES/);
 assert.match(native, /Start-Transcript/);
+assert.match(native, /copyFileSync/);
+assert.match(native, /Add-Content/);
+assert.match(native, /cmd\.exe/);
+assert.match(native, /start "CDQUpdate"/);
+assert.match(native, /spawn\(cmd/);
+assert.doesNotMatch(native, /spawn\(ps\s*,/);
 assert.match(index, /setTimeout\(r, 8000\)/);
 assert.match(index, /Atualizando o CompleteDiscordQuest/);
 
@@ -23,6 +29,21 @@ assert.match(install, /installed-sha\.txt/);
 assert.match(install, /vencord-root\.txt/);
 assert.match(install, /ja esta na versao do GitHub/);
 assert.match(install, /RepoUpdated/);
+assert.match(install, /Get-GitHead \$pluginDest/);
+assert.match(install, /\$localSha -eq \$wantSha/);
+assert.match(install, /FETCH_HEAD/);
+assert.match(install, /origin\/main/);
+assert.match(install, /if \(\$Yes\) \{ Start-Discord \}/);
+assert.match(install, /update-ref HEAD FETCH_HEAD/);
+assert.match(install, /robocopy/);
+
+function shouldSkip(localSha, wantSha, distExists, repoUpdated) {
+    return !repoUpdated && Boolean(localSha) && Boolean(wantSha) && localSha === wantSha && distExists;
+}
+assert.equal(shouldSkip("3df25e8", "3302793", true, false), false);
+assert.equal(shouldSkip("3302793", "3302793", true, false), true);
+assert.equal(shouldSkip("3302793", "3302793", false, false), false);
+assert.equal(shouldSkip("3302793", "3302793", true, true), false);
 
 assert.match(settings, /autoUpdate:/);
 assert.match(index, /maybeAutoUpdate/);
