@@ -42,8 +42,8 @@ export default definePluginSettings({
     showQuestsButtonSettingsBar: {
         type: OptionType.BOOLEAN,
         displayName: "Botão no card do usuário",
-        description: "Mostrar o botão de missões no card do usuário (mudo, fone, configurações).",
-        default: false,
+        description: "Mostrar o botão de missões no card do usuário (mudo, fone, configurações). Botão direito: resgates e missões que precisam de call.",
+        default: true,
         restartNeeded: true
     },
     showQuestsButtonBadges: {
@@ -81,6 +81,12 @@ export default definePluginSettings({
         displayName: "Resgatar recompensas sozinho",
         description: "Resgatar missões já concluídas.",
         default: true
+    },
+    claimedLog: {
+        type: OptionType.STRING,
+        description: "Histórico de resgates do plugin.",
+        default: "[]",
+        hidden: true
     },
     farmRewardCodes: {
         type: OptionType.BOOLEAN,

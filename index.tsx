@@ -10,7 +10,7 @@ import { FluxDispatcher, RestAPI, Toasts } from "@webpack/common";
 
 import { QuestButton, QuestsCount } from "./components/QuestButton";
 import { nextConsentAction } from "./consent";
-import { isClaimable, nextRetryDelay, pickPlayActivityChannel, shouldGiveUpRetry } from "./farm";
+import { appendClaimedLog, isClaimable, nextRetryDelay, pickPlayActivityChannel, shouldGiveUpRetry } from "./farm";
 import settings from "./settings";
 import { ChannelStore, GuildChannelStore, QuestsStore, RunningGameStore } from "./stores";
 
@@ -65,8 +65,8 @@ export default definePlugin({
         {
             find: "accountContainerRef:",
             replacement: {
-                match: /className:\i\.Uo,style:\i,children:\[/,
-                replace: "$&$self.renderQuestButtonSettingsBar(),"
+                match: /children:\[(?=.{0,120}accountContainerRef:\i)/,
+                replace: "children:[$self.renderQuestButtonSettingsBar(),"
             }
         },
         { // PTB Experimental
@@ -318,6 +318,11 @@ function claimQuest(quest: QuestValue) {
         },
     }).then(() => {
         console.log("Claimed quest:", questName);
+        settings.store.claimedLog = appendClaimedLog(settings.store.claimedLog, {
+            id: quest.id,
+            name: questName,
+            at: new Date().toISOString(),
+        });
     }).catch(err => {
         console.error("Failed to claim quest:", questName, err);
         claimingQuest.delete(quest.id);

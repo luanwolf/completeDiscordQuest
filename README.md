@@ -49,8 +49,9 @@ Na primeira reinicialização depois de ativar, aparece um aviso de risco. OK li
 - Resgata recompensas de missões já concluídas
 - Filtra por tipo de missão e de recompensa
 - Botão de missões na barra de cima e no card do usuário (mudo, fone, configurações)
+- Botão direito no ícone: resgates automáticos e missões que precisam de call
 
-Missões de transmitir ainda pedem uma call com outra pessoa e compartilhar qualquer janela.
+Missões de transmitir ainda pedem uma call com outra pessoa e compartilhar qualquer janela. O ícone fica com aviso amarelo enquanto isso.
 
 ## Créditos
 
