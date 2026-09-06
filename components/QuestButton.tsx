@@ -15,7 +15,7 @@ import settings from "../settings";
 import { QuestsStore } from "../stores";
 
 const QuestIcon = findByCodeLazy("\"M7.5 21.7a8.95");
-const TopBarButton = findComponentByCodeLazy("badgePosition", "icon");
+const HeaderBarIcon = findComponentByCodeLazy(".HEADER_BAR_BADGE_BOTTOM,", 'position:"bottom"');
 const PanelButton = findComponentByCodeLazy(".GREEN,positionKeyStemOverride:");
 const CountBadge = findComponentByCodeLazy("renderBadgeCount", "disableColor");
 
@@ -179,19 +179,14 @@ export function QuestButton({ type }: { type: "top-bar" | "settings-bar"; }) {
 
     if (type === "top-bar") {
         return (
-            <TopBarButton
+            <HeaderBarIcon
                 className={className}
-                iconClassName={undefined}
-                disabled={false}
-                showBadge={showBadge}
-                badgePosition={"bottom"}
-                icon={QuestIcon}
-                iconSize={20}
                 onClick={openQuestHome}
                 onContextMenu={openQuestOverview}
                 tooltip={tooltip}
-                tooltipPosition={"bottom"}
-                hideOnClick={false}
+                icon={QuestIcon}
+                showBadge={showBadge}
+                badgePosition="bottom"
             />
         );
     } else if (type === "settings-bar") {

@@ -50,6 +50,7 @@ Na primeira reinicialização depois de ativar, aparece um aviso de risco. OK li
 - Filtra por tipo de missão e de recompensa
 - Botão de missões na barra de cima e no card do usuário (mudo, fone, configurações)
 - Botão direito no ícone: resgates automáticos e missões que precisam de call
+- Atualiza sozinho ao abrir o Discord (dá para desligar nas opções do plugin)
 
 Missões de transmitir ainda pedem uma call com outra pessoa e compartilhar qualquer janela. O ícone fica com aviso amarelo enquanto isso.
 

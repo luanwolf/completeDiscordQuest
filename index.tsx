@@ -5,7 +5,7 @@
  */
 
 import ErrorBoundary from "@components/ErrorBoundary";
-import definePlugin from "@utils/types";
+import definePlugin, { PluginNative } from "@utils/types";
 import { findByCodeLazy, findByPropsLazy } from "@webpack";
 import { FluxDispatcher, RestAPI, Toasts } from "@webpack/common";
 
@@ -14,6 +14,8 @@ import { nextConsentAction } from "./consent";
 import { appendClaimedLog, isClaimable, nextRetryDelay, pickPlayActivityChannel, shouldGiveUpRetry } from "./farm";
 import settings from "./settings";
 import { ChannelStore, GuildChannelStore, QuestsStore, RunningGameStore } from "./stores";
+
+const Native = VencordNative.pluginHelpers?.CompleteDiscordQuest as PluginNative<typeof import("./native")> | undefined;
 
 declare const IS_DISCORD_DESKTOP: boolean | undefined;
 declare const IS_VESKTOP: boolean | undefined;
@@ -57,10 +59,10 @@ export default definePlugin({
     settings,
     patches: [
         {
-            find: ".PlatformTypes.WEB",
+            find: '?"BACK_FORWARD_NAVIGATION":',
             replacement: {
-                match: /(\((\i)\){)(let{leading)/,
-                replace: "$1$2?.trailing?.props?.children?.unshift($self.renderQuestButtonTopBar());$3"
+                match: /(trailing:.{0,80}?\{children:\[)/,
+                replace: "$1$self.renderQuestButtonTopBar(),"
             }
         },
         {
@@ -108,6 +110,8 @@ export default definePlugin({
         }
     ],
     start: () => {
+        void maybeAutoUpdate();
+
         if (!settings.store.panelButtonSeen) {
             settings.store.showQuestsButtonSettingsBar = true;
             settings.store.panelButtonSeen = true;
@@ -127,9 +131,12 @@ export default definePlugin({
     },
 
     renderQuestButtonTopBar() {
-        if (settings.store.showQuestsButtonTopBar) {
-            return <QuestButton type="top-bar" />;
-        }
+        if (!settings.store.showQuestsButtonTopBar) return null;
+        return (
+            <ErrorBoundary noop>
+                <QuestButton type="top-bar" />
+            </ErrorBoundary>
+        );
     },
 
     renderQuestButtonSettingsBar() {
@@ -192,6 +199,19 @@ function isQuestEligibleForFarming(quest: QuestValue): boolean {
             || reward.type === 4 && settings.store.farmVirtualCurrency
             || reward.type === 5 && settings.store.farmFractionalPremium);
     });
+}
+
+async function maybeAutoUpdate() {
+    if (!settings.store.autoUpdate) return;
+    if (!Native) return;
+    try {
+        if (await Native.hasUpdate()) {
+            notify("Atualizando o plugin. O Discord vai reiniciar.");
+            Native.applyUpdate();
+        }
+    } catch (err) {
+        console.warn(err);
+    }
 }
 
 function notify(message: string) {

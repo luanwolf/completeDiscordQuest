@@ -480,6 +480,25 @@ function Test-GitDirty([string]$Dest) {
     finally { $ErrorActionPreference = $old }
 }
 
+function Get-GitHead([string]$Dest) {
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $h = & (Resolve-Native 'git') -C $Dest rev-parse HEAD 2>$null
+        if ($LASTEXITCODE) { return '' }
+        return ("$h").Trim()
+    } catch { return '' }
+    finally { $ErrorActionPreference = $old }
+}
+
+function Save-InstallState([string]$Root, [string]$PluginDest) {
+    $dir = Join-Path $env:LOCALAPPDATA 'completeDiscordQuest'
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    Save-Text (Join-Path $dir 'vencord-root.txt') $Root
+    $sha = Get-GitHead $PluginDest
+    if ($sha) { Save-Text (Join-Path $dir 'installed-sha.txt') $sha }
+}
+
 function Ensure-Repo([string]$Url, [string]$Dest, [switch]$NoPull) {
     $git = Resolve-Native 'git'
     if (Test-Path -LiteralPath (Join-Path $Dest '.git')) {
@@ -491,6 +510,7 @@ function Ensure-Repo([string]$Url, [string]$Dest, [switch]$NoPull) {
             Write-Warn "checkout com mudancas locais — alinhando com o GitHub"
         }
         Write-Step "atualizando $Dest"
+        $before = Get-GitHead $Dest
         $old = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         try {
@@ -506,6 +526,7 @@ function Ensure-Repo([string]$Url, [string]$Dest, [switch]$NoPull) {
             }
             & $git -C $Dest clean -fd
         } finally { $ErrorActionPreference = $old }
+        if ($before -ne (Get-GitHead $Dest)) { $script:RepoUpdated = $true }
         Write-Ok 'repositorio atualizado'
         return
     }
@@ -521,6 +542,7 @@ function Ensure-Repo([string]$Url, [string]$Dest, [switch]$NoPull) {
     if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
     Write-Step "git clone $Url"
     Invoke-Exe -File git -CmdArgs @('clone', '--depth', '1', $Url, $Dest)
+    $script:RepoUpdated = $true
     Write-Ok "clonado em $Dest"
 }
 
@@ -647,6 +669,7 @@ function Invoke-Install {
 
     Install-Toolchain
 
+    $script:RepoUpdated = $false
     Write-Step "Vencord em $root"
     if (Test-VencordSource $root) { Write-Ok 'reusando pasta existente' }
     Ensure-Repo $VencordGit $root -NoPull
@@ -654,6 +677,16 @@ function Invoke-Install {
     $pluginDest = Join-Path $root "src\userplugins\$PluginName"
     Write-Step "plugin em $pluginDest"
     Ensure-Repo $PluginRepo $pluginDest
+
+    $dist = Join-Path $root 'dist\vencordDesktopRenderer.js'
+    if (-not $script:RepoUpdated -and (Test-Path -LiteralPath $dist)) {
+        Save-InstallState $root $pluginDest
+        Set-PluginEnabled $root
+        Write-Ok 'plugin ja esta na versao do GitHub'
+        Write-Host ''
+        Write-Ok 'Pronto. Nada novo pra instalar.'
+        return
+    }
 
     Push-Location -LiteralPath $root
     try {

@@ -14,6 +14,12 @@ export default definePluginSettings({
         description: "Permitir completar missões automaticamente. Desligue para parar.",
         default: false
     },
+    autoUpdate: {
+        type: OptionType.BOOLEAN,
+        displayName: "Atualizar sozinho",
+        description: "Ao abrir o Discord, checar o GitHub e atualizar. O cliente reinicia se tiver versão nova.",
+        default: true
+    },
     hasSeenConsentWarning: {
         type: OptionType.BOOLEAN,
         description: "Aviso de risco já foi mostrado.",
@@ -48,7 +54,7 @@ export default definePluginSettings({
     showQuestsButtonSettingsBar: {
         type: OptionType.BOOLEAN,
         displayName: "Botão no card do usuário",
-        description: "Mostrar o botão de missões no card do usuário (mudo, fone, configurações). Botão direito: resgates e missões que precisam de call.",
+        description: "Mostrar o botão de missões no card do usuário (mudo, fone, configurações). Botão direito: resgates e o que precisa de call.",
         default: true,
         restartNeeded: true
     },
