@@ -137,12 +137,13 @@ function Tui-Menu([string]$title, [string[]]$items) {
         while ($true) {
             Tui-ClearBelow 1
             Write-Host "`r" -NoNewline
-            $top = '─' * (62 - 8)
-            Write-Host "$($script:TuiBg)$($script:TuiRset)┌─ $($script:TuiAccent)$title$($script:TuiRset) ─$($script:TuiDim)$top$($script:TuiRset)" -NoNewline
+            $w = 62
+            $topDashes = [Math]::Max(1, $w - 5 - $title.Length)
+            Write-Host "$($script:TuiBg)$($script:TuiRset)┌─ $($script:TuiAccent)$title$($script:TuiRset) $($script:TuiDim)$('─' * $topDashes)$($script:TuiRset)┐" -NoNewline
             Write-Host ''
             for ($i = 0; $i -lt $n; $i++) {
                 $txt = $items[$i]
-                $pad = ' ' * [Math]::Max(0, (62 - 6 - $txt.Length))
+                $pad = ' ' * [Math]::Max(0, ($w - 6 - $txt.Length))
                 if ($i -eq $sel) {
                     Write-Host "$($script:TuiBg)│ $($script:TuiAccent)●$($script:TuiRset) $($script:TuiBold)$txt$($script:TuiRset)$pad │$($script:TuiRset)" -NoNewline
                 } else {
@@ -150,7 +151,7 @@ function Tui-Menu([string]$title, [string[]]$items) {
                 }
                 Write-Host ''
             }
-            Write-Host "$($script:TuiBg)└$('─' * (62 - 2))┘$($script:TuiRset)" -NoNewline
+            Write-Host "$($script:TuiBg)└$('─' * ($w - 2))┘$($script:TuiRset)" -NoNewline
             Write-Host ''
             Write-Host "  $($script:TuiDim)[↑↓] navegar  ·  [Enter] escolher  ·  [Esc] cancelar$($script:TuiRset)"
             $key = Tui-GetKey
@@ -469,14 +470,37 @@ function Install-Toolchain {
     Write-Ok "pnpm $script:PnpmVersion"
 }
 
+function Test-GitDirty([string]$Dest) {
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = & (Resolve-Native 'git') -C $Dest status --porcelain 2>$null
+        return [bool]$out
+    } catch { return $true }
+    finally { $ErrorActionPreference = $old }
+}
+
 function Ensure-Repo([string]$Url, [string]$Dest, [switch]$NoPull) {
     if (Test-Path -LiteralPath (Join-Path $Dest '.git')) {
         if ($NoPull) {
             Write-Ok 'reusando checkout (sem git pull)'
             return
         }
+        if (Test-GitDirty $Dest) {
+            Write-Warn "checkout com mudancas locais — sem git pull"
+            Write-Ok "reusando $Dest"
+            return
+        }
         Write-Step "atualizando $Dest"
-        Invoke-Exe -File git -CmdArgs @('-C', $Dest, 'pull', '--ff-only')
+        $old = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & (Resolve-Native 'git') -C $Dest pull --ff-only
+            if ($LASTEXITCODE) {
+                Write-Warn "git pull falhou — reusando o que ja esta em $Dest"
+                return
+            }
+        } finally { $ErrorActionPreference = $old }
         Write-Ok 'repositorio atualizado'
         return
     }

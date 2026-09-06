@@ -31,6 +31,10 @@ assert.match(src, /function Set-PluginEnabled/);
 assert.match(src, /function Stop-Discord/);
 assert.match(src, /function Start-Discord/);
 assert.match(src, /Update\.exe/);
+assert.match(src, /Test-GitDirty/);
+assert.match(src, /status --porcelain/);
+assert.match(src, /checkout com mudancas locais/);
+assert.match(src, /git pull falhou/);
 assert.equal((src.match(/\$MinNodeMajor = 22/) || []).length, 1);
 
 console.log("install.check ok");
