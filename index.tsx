@@ -6,10 +6,11 @@
 
 import definePlugin from "@utils/types";
 import { findByCodeLazy, findByPropsLazy } from "@webpack";
-import { FluxDispatcher, RestAPI } from "@webpack/common";
+import { FluxDispatcher, RestAPI, Toasts } from "@webpack/common";
 
 import { QuestButton, QuestsCount } from "./components/QuestButton";
 import { nextConsentAction } from "./consent";
+import { isClaimable, nextRetryDelay, pickPlayActivityChannel, shouldGiveUpRetry } from "./farm";
 import settings from "./settings";
 import { ChannelStore, GuildChannelStore, QuestsStore, RunningGameStore } from "./stores";
 
@@ -24,6 +25,8 @@ let acceptableQuests: QuestValue[] = [];
 let completableQuests: QuestValue[] = [];
 
 const completingQuest = new Map();
+const claimingQuest = new Set<string>();
+const givenUpQuest = new Set<string>();
 const fakeGames = new Map();
 const fakeApplications = new Map();
 
@@ -174,6 +177,18 @@ function isQuestEligibleForFarming(quest: QuestValue): boolean {
     });
 }
 
+function notify(message: string) {
+    try {
+        Toasts.show({
+            message,
+            id: Toasts.genId(),
+            type: Toasts.Type.MESSAGE,
+        });
+    } catch {
+        console.log(message);
+    }
+}
+
 function ensureHasAcceptedToUsePlugin(): boolean {
     const action = nextConsentAction({
         hasAccepted: settings.store.hasAcceptedToUsePlugin === true,
@@ -216,6 +231,7 @@ function updateQuests() {
         }
     }
     for (const quest of completableQuests) {
+        if (givenUpQuest.has(quest.id)) continue;
         if (completingQuest.has(quest.id)) {
             if (completingQuest.get(quest.id) === false) {
                 completingQuest.delete(quest.id);
@@ -223,6 +239,9 @@ function updateQuests() {
         } else {
             completeQuest(quest);
         }
+    }
+    for (const quest of availableQuests) {
+        if (isClaimable(quest)) claimQuest(quest);
     }
 }
 
@@ -261,6 +280,8 @@ function stopCompletingAll() {
 
 function stopAllFarming() {
     stopCompletingAll();
+    claimingQuest.clear();
+    givenUpQuest.clear();
 
     if (fakeGames.size > 0) {
         const removedGames = Array.from(fakeGames.values());
@@ -274,16 +295,53 @@ function stopAllFarming() {
     }
 }
 
+function claimQuest(quest: QuestValue) {
+    if (!settings.store.claimRewardsAutomatically) return;
+    if (!isClaimable(quest) || claimingQuest.has(quest.id)) return;
+
+    const questName = quest.config.messages.questName;
+    const location = QuestLocationMap?.QUEST_HOME_DESKTOP;
+    if (location == null) {
+        console.error("Failed to claim quest:", questName, "claim location unavailable");
+        return;
+    }
+
+    claimingQuest.add(quest.id);
+    console.log("Claiming quest:", questName);
+    RestAPI.post({
+        url: `/quests/${quest.id}/claim-reward`,
+        body: {
+            platform: 0,
+            location,
+            is_targeted: false,
+            metadata_raw: null,
+        },
+    }).then(() => {
+        console.log("Claimed quest:", questName);
+    }).catch(err => {
+        console.error("Failed to claim quest:", questName, err);
+        claimingQuest.delete(quest.id);
+    });
+}
+
 async function postWithRetry(questId: string, url: string, body: any) {
     let delay = 5;
-    const maxDelay = 300;
+    let attempts = 0;
     while (completingQuest.get(questId)) {
         try {
             return await RestAPI.post({ url, body });
         } catch (err) {
+            attempts++;
             console.warn(`Failed to POST to ${url}:`, err);
+            if (shouldGiveUpRetry(attempts)) {
+                console.warn(`Giving up POST to ${url} after ${attempts} tries`);
+                completingQuest.set(questId, false);
+                givenUpQuest.add(questId);
+                notify("Falha ao completar uma missão (API). Tente desligar e ligar o plugin.");
+                return;
+            }
             await new Promise(resolve => setTimeout(resolve, delay * 1000));
-            delay = Math.min(delay * 2, maxDelay);
+            delay = nextRetryDelay(delay);
         }
     }
 }
@@ -449,12 +507,23 @@ function completeQuest(quest: QuestValue) {
             };
             FluxDispatcher.subscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", streamOnDesktop);
 
-            console.log(`Spoofed your stream to ${applicationName}. Stream any window in vc for ${Math.ceil((secondsNeeded - secondsDone) / 60)} more minutes.`);
-            console.log("Remember that you need at least 1 other person to be in the vc!");
+            const streamHint = `Missão de transmitir (${applicationName}): entre numa call com outra pessoa e compartilhe qualquer janela por ${Math.ceil((secondsNeeded - secondsDone) / 60)} min.`;
+            notify(streamHint);
+            console.log(streamHint);
             break;
 
         case "PLAY_ACTIVITY":
-            const channelId = ChannelStore.getSortedPrivateChannels()[0]?.id ?? Object.values(GuildChannelStore.getAllGuilds()).find(x => x != null && x.VOCAL.length > 0).VOCAL[0].channel.id;
+            const channelId = pickPlayActivityChannel(
+                ChannelStore.getSortedPrivateChannels() ?? [],
+                Object.values(GuildChannelStore.getAllGuilds() ?? {})
+            );
+            if (!channelId) {
+                console.error("No voice or DM channel for PLAY_ACTIVITY:", questName);
+                completingQuest.set(quest.id, false);
+                givenUpQuest.add(quest.id);
+                notify("Missão de atividade: entre numa call ou abra um chat e tente de novo.");
+                return;
+            }
             const streamKey = `call:${channelId}:1`;
 
             const playActivity = async () => {

@@ -469,8 +469,12 @@ function Install-Toolchain {
     Write-Ok "pnpm $script:PnpmVersion"
 }
 
-function Ensure-Repo([string]$Url, [string]$Dest) {
+function Ensure-Repo([string]$Url, [string]$Dest, [switch]$NoPull) {
     if (Test-Path -LiteralPath (Join-Path $Dest '.git')) {
+        if ($NoPull) {
+            Write-Ok 'reusando checkout (sem git pull)'
+            return
+        }
         Write-Step "atualizando $Dest"
         Invoke-Exe -File git -CmdArgs @('-C', $Dest, 'pull', '--ff-only')
         Write-Ok 'repositorio atualizado'
@@ -485,6 +489,69 @@ function Ensure-Repo([string]$Url, [string]$Dest) {
     Write-Step "git clone $Url"
     Invoke-Exe -File git -CmdArgs @('clone', '--depth', '1', $Url, $Dest)
     Write-Ok "clonado em $Dest"
+}
+
+function Save-Text($path, $text) {
+    $dir = Split-Path -Parent $path
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    [IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+function Set-PluginEnabled([string]$root) {
+    $files = @()
+    if ($env:APPDATA) { $files += (Join-Path $env:APPDATA 'Vencord\settings\settings.json') }
+    if ($root -and (Test-Path -LiteralPath (Join-Path $root 'settings'))) {
+        $files += (Join-Path $root 'settings\settings.json')
+    }
+    if ($env:APPDATA -and (Test-Path -LiteralPath (Join-Path $env:APPDATA 'vesktop'))) {
+        $files += (Join-Path $env:APPDATA 'vesktop\settings\settings.json')
+    }
+
+    foreach ($file in ($files | Select-Object -Unique)) {
+        $settings = $null
+        if (Test-Path -LiteralPath $file) {
+            try { $settings = Get-Content -LiteralPath $file -Raw | ConvertFrom-Json } catch { $settings = 'ilegivel' }
+        }
+        if ($settings -is [string]) {
+            Write-Warn "Nao consegui ler $file, nao mexi nele."
+            continue
+        }
+        if ($null -eq $settings) { $settings = [pscustomobject]@{} }
+        if (-not $settings.PSObject.Properties['plugins']) {
+            $settings | Add-Member -NotePropertyName plugins -NotePropertyValue ([pscustomobject]@{}) -Force
+        }
+        $existing = $settings.plugins.PSObject.Properties['CompleteDiscordQuest']
+        $plugin = if ($existing) { $existing.Value } else { [pscustomobject]@{} }
+        $plugin | Add-Member -NotePropertyName enabled -NotePropertyValue $true -Force
+        $settings.plugins | Add-Member -NotePropertyName CompleteDiscordQuest -NotePropertyValue $plugin -Force
+        Save-Text $file ($settings | ConvertTo-Json -Depth 10)
+        Write-Ok "plugin ativado em $file"
+    }
+}
+
+function Stop-Discord {
+    if (-not (Get-Process -Name $DiscordNames -ErrorAction SilentlyContinue)) { return }
+    Write-Step 'Fechando o Discord'
+    Get-Process -Name $DiscordNames -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep -Milliseconds 300
+        if (-not (Get-Process -Name $DiscordNames -ErrorAction SilentlyContinue)) { return }
+    }
+    throw 'O Discord nao fechou. Feche pelo icone na bandeja e rode de novo.'
+}
+
+function Start-Discord {
+    $localApp = Get-EffectiveLocalApp
+    foreach ($name in $DiscordNames) {
+        $exe = Join-Path $localApp "$name\Update.exe"
+        if (Test-Path -LiteralPath $exe) {
+            Start-Process -FilePath $exe -ArgumentList '--processStart', "$name.exe"
+            Write-Ok "Discord reaberto ($name)"
+            return
+        }
+    }
 }
 
 function Select-Target($found) {
@@ -541,6 +608,7 @@ function Invoke-Install {
     }
     Write-Host '    3. Instalar o plugin em src\userplugins' -ForegroundColor DarkGray
     Write-Host '    4. Compilar e injetar no Discord' -ForegroundColor DarkGray
+    Write-Host '    5. Ativar o plugin e reabrir o Discord' -ForegroundColor DarkGray
     Write-Host ''
     if (-not (Confirm-Action 'Pode seguir?')) { throw 'Cancelado.' }
 
@@ -548,7 +616,7 @@ function Invoke-Install {
 
     Write-Step "Vencord em $root"
     if (Test-VencordSource $root) { Write-Ok 'reusando pasta existente' }
-    Ensure-Repo $VencordGit $root
+    Ensure-Repo $VencordGit $root -NoPull
 
     $pluginDest = Join-Path $root "src\userplugins\$PluginName"
     Write-Step "plugin em $pluginDest"
@@ -575,11 +643,14 @@ function Invoke-Install {
         }
     } finally { Pop-Location }
 
+    Stop-Discord
+    Write-Step 'Ativando o plugin'
+    Set-PluginEnabled $root
+    Start-Discord
+
     Write-Host ''
-    Write-Ok 'Pronto.'
-    Write-Host '  1. Feche o Discord pela bandeja e abra de novo.' -ForegroundColor DarkGray
-    Write-Host '  2. Configuracoes > Vencord > Plugins > CompleteDiscordQuest > ligue.' -ForegroundColor DarkGray
-    Write-Host '  Na primeira vez aparece um aviso de risco.' -ForegroundColor DarkGray
+    Write-Ok 'Pronto. O plugin ja vem ligado.'
+    Write-Host '  Na primeira vez aparece um aviso de risco. OK liga a automacao.' -ForegroundColor DarkGray
 }
 
 Show-Banner

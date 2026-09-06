@@ -24,6 +24,13 @@ assert.match(src, /function Show-Banner/);
 assert.match(src, /function Tui-Menu/);
 assert.match(src, /\[OK\]/);
 assert.match(src, /\[\*\]/);
+assert.match(src, /NoPull/);
+assert.match(src, /sem git pull/);
+assert.match(src, /CompleteDiscordQuest/);
+assert.match(src, /function Set-PluginEnabled/);
+assert.match(src, /function Stop-Discord/);
+assert.match(src, /function Start-Discord/);
+assert.match(src, /Update\.exe/);
 assert.equal((src.match(/\$MinNodeMajor = 22/) || []).length, 1);
 
 console.log("install.check ok");

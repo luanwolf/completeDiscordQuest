@@ -67,13 +67,19 @@ export default definePluginSettings({
     farmStreamOnDesktop: {
         type: OptionType.BOOLEAN,
         displayName: "Missões de transmitir",
-        description: "Completar missões de transmitir.",
+        description: "Completar missões de transmitir. Ainda precisa de uma call com outra pessoa e transmitir qualquer janela.",
         default: true
     },
     farmPlayActivity: {
         type: OptionType.BOOLEAN,
         displayName: "Missões de atividade",
         description: "Completar missões de atividade.",
+        default: true
+    },
+    claimRewardsAutomatically: {
+        type: OptionType.BOOLEAN,
+        displayName: "Resgatar recompensas sozinho",
+        description: "Resgatar missões já concluídas.",
         default: true
     },
     farmRewardCodes: {

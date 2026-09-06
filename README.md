@@ -23,7 +23,7 @@ No PowerShell **sem** administrador:
 irm https://raw.githubusercontent.com/luanwolf/completeDiscordQuest/main/install.ps1 | iex
 ```
 
-O script instala Git e Node 22+ se faltar, reusa o Vencord de código fonte se já existir (senão clona em `%USERPROFILE%\Vencord`), coloca este plugin em `src\userplugins`, roda `pnpm build` e injeta no Discord.
+O script instala Git e Node 22+ se faltar, reusa o Vencord de código fonte se já existir (sem `git pull` nessa pasta), coloca este plugin em `src\userplugins`, roda `pnpm build`, injeta no Discord, liga o plugin e reabre o cliente.
 
 Outra pasta do Vencord: `$env:VENCORD_DIR='D:\Vencord'; irm https://raw.githubusercontent.com/luanwolf/completeDiscordQuest/main/install.ps1 | iex`
 
@@ -38,7 +38,7 @@ git clone https://github.com/luanwolf/completeDiscordQuest.git
 ```
 
 3. Reinjete o Vencord (`pnpm inject` na pasta do Vencord) e reinicie o Discord.
-4. Ative o plugin em Configurações do Vencord > Plugins.
+4. Ative o plugin em Configurações do Vencord > Plugins (o instalador Windows já faz isso).
 
 Na primeira reinicialização depois de ativar, aparece um aviso de risco. OK liga a automação. Cancelar deixa desligada (você pode ligar depois nas opções do plugin).
 
@@ -46,8 +46,11 @@ Na primeira reinicialização depois de ativar, aparece um aviso de risco. OK li
 
 - Aceita missões sozinho (opcional)
 - Completa vídeo, jogar no app, transmitir e atividade
+- Resgata recompensas de missões já concluídas
 - Filtra por tipo de missão e de recompensa
 - Botão de missões na barra de cima e no card do usuário (mudo, fone, configurações)
+
+Missões de transmitir ainda pedem uma call com outra pessoa e compartilhar qualquer janela.
 
 ## Créditos
 
