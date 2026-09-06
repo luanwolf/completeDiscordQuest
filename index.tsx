@@ -206,7 +206,7 @@ async function maybeAutoUpdate() {
     if (!Native) return;
     try {
         if (await Native.hasUpdate()) {
-            notify("Atualizando o plugin. O Discord vai reiniciar.");
+            notify("Atualizando o CompleteDiscordQuest. O Discord irá reiniciar em alguns instantes.");
             if (!await Native.applyUpdate()) {
                 notify("Nao achei a pasta do Vencord pra atualizar.");
             }

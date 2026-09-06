@@ -114,24 +114,46 @@ export async function hasUpdate(_event: IpcMainInvokeEvent) {
     return Boolean(remote) && remote !== local;
 }
 
+function spawnEnv(root: string) {
+    const home = process.env.USERPROFILE || "";
+    const local = process.env.LOCALAPPDATA || join(home, "AppData", "Local");
+    const pf = process.env.ProgramFiles || "C:\\Program Files";
+    const path = [
+        process.env.PATH,
+        join(pf, "Git", "cmd"),
+        join(pf, "nodejs"),
+        join(home, "AppData", "Roaming", "npm"),
+        join(local, "completeDiscordQuest", "deps", "pnpm", "node_modules", ".bin"),
+    ].filter(Boolean).join(";");
+    return { ...process.env, CDQ_YES: "1", VENCORD_DIR: root, PATH: path };
+}
+
 export function applyUpdate(_event: IpcMainInvokeEvent) {
     const plugin = findPluginDir();
     if (!plugin) return false;
     const root = vencordRootFromPlugin(plugin);
     rememberRoot(root);
     const script = join(plugin, "install.ps1");
+    if (!existsSync(script)) return false;
+    const dir = dataDir();
+    mkdirSync(dir, { recursive: true });
     const ps = join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-    const child = spawn(ps, [
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-WindowStyle", "Hidden",
-        "-File", script,
-        "-Yes"
-    ], {
+    const log = join(dir, "update.log");
+    const cmd = join(dir, "run-update.cmd");
+    writeFileSync(cmd, [
+        "@echo off",
+        "set CDQ_YES=1",
+        `set "VENCORD_DIR=${root}"`,
+        `echo [%date% %time%] start > "${log}"`,
+        `"${ps}" -NoProfile -ExecutionPolicy Bypass -File "${script}" -Yes >> "${log}" 2>&1`,
+        `echo [%date% %time%] exit %ERRORLEVEL% >> "${log}"`,
+    ].join("\r\n"), "utf8");
+    const child = spawn("cmd.exe", ["/c", cmd], {
         detached: true,
         stdio: "ignore",
         windowsHide: true,
-        env: { ...process.env, CDQ_YES: "1", VENCORD_DIR: root }
+        cwd: root,
+        env: spawnEnv(root)
     });
     child.unref();
     return true;

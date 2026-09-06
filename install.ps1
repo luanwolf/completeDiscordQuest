@@ -9,13 +9,14 @@
     .\install.ps1 -Yes
     $env:VENCORD_DIR='D:\Vencord'; irm ... | iex
 #>
+param([switch]$Yes)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force } catch { }
 
-$Yes = ($args -contains '-Yes') -or ($env:CDQ_YES -eq '1')
+$Yes = [bool]$Yes -or ($env:CDQ_YES -eq '1') -or ($args -contains '-Yes')
 $Source = $env:VENCORD_DIR
 $PluginRepo = 'https://github.com/luanwolf/completeDiscordQuest.git'
 $PluginName = 'completeDiscordQuest'
@@ -667,7 +668,9 @@ function Invoke-Install {
     Write-Host ''
     if (-not (Confirm-Action 'Pode seguir?')) { throw 'Cancelado.' }
 
-    Install-Toolchain
+    Refresh-Path
+    $gitCmd = Join-Path $env:ProgramFiles 'Git\cmd'
+    if ($gitCmd -and (Test-Path -LiteralPath $gitCmd)) { $env:Path = "$gitCmd;$env:Path" }
 
     $script:RepoUpdated = $false
     Write-Step "Vencord em $root"
@@ -720,6 +723,11 @@ function Invoke-Install {
 }
 
 Show-Banner
+if ($Yes) {
+    $logDir = Join-Path $env:LOCALAPPDATA 'completeDiscordQuest'
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    try { Start-Transcript -Path (Join-Path $logDir 'update.log') -Append | Out-Null } catch { }
+}
 try {
     Invoke-Install
 } catch {
