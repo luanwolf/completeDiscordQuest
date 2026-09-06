@@ -15,6 +15,8 @@ assert.match(native, /findPluginDir/);
 assert.match(native, /run-update\.ps1/);
 assert.match(native, /Encoding UTF8/);
 assert.match(native, /CDQ_YES/);
+assert.match(native, /Start-Transcript/);
+assert.match(index, /setTimeout\(r, 8000\)/);
 assert.match(index, /Atualizando o CompleteDiscordQuest/);
 
 assert.match(install, /installed-sha\.txt/);

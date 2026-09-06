@@ -143,10 +143,18 @@ export function applyUpdate(_event: IpcMainInvokeEvent) {
     const launcher = join(dir, "run-update.ps1");
     const q = (s: string) => "'" + s.replace(/'/g, "''") + "'";
     writeFileSync(launcher, [
+        `$log = ${q(log)}`,
+        "Start-Transcript -Path $log -Append | Out-Null",
         "$ErrorActionPreference = 'Stop'",
         "$env:CDQ_YES = '1'",
         `$env:VENCORD_DIR = ${q(root)}`,
-        `Get-Content -LiteralPath ${q(script)} -Raw -Encoding UTF8 | Invoke-Expression`,
+        "try {",
+        `  Get-Content -LiteralPath ${q(script)} -Raw -Encoding UTF8 | Invoke-Expression`,
+        "} catch {",
+        "  Write-Host $_",
+        "  Write-Host $_.ScriptStackTrace",
+        "  throw",
+        "} finally { Stop-Transcript | Out-Null }",
     ].join("\r\n"), "ascii");
     const child = spawn(ps, [
         "-NoProfile",
@@ -155,7 +163,7 @@ export function applyUpdate(_event: IpcMainInvokeEvent) {
     ], {
         detached: true,
         stdio: ["ignore", "ignore", "ignore"],
-        windowsHide: false,
+        windowsHide: true,
         cwd: root,
         env: spawnEnv(root)
     });

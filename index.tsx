@@ -204,6 +204,7 @@ function isQuestEligibleForFarming(quest: QuestValue): boolean {
 async function maybeAutoUpdate() {
     if (!settings.store.autoUpdate) return;
     if (!Native) return;
+    await new Promise(r => setTimeout(r, 8000));
     try {
         if (await Native.hasUpdate()) {
             notify("Atualizando o CompleteDiscordQuest. O Discord irá reiniciar em alguns instantes.");

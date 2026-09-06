@@ -667,6 +667,11 @@ function Invoke-Install {
     Write-Host ''
     if (-not (Confirm-Action 'Pode seguir?')) { throw 'Cancelado.' }
 
+    if ($Yes) {
+        Write-Step 'Fechando o Discord para atualizar'
+        Stop-Discord
+    }
+
     Refresh-Path
     $gitCmd = Join-Path $env:ProgramFiles 'Git\cmd'
     if ($gitCmd -and (Test-Path -LiteralPath $gitCmd)) { $env:Path = "$gitCmd;$env:Path" }
