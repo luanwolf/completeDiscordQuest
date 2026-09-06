@@ -9,8 +9,9 @@ const index = readFileSync(new URL("./index.tsx", import.meta.url), "utf8");
 assert.match(native, /export async function hasUpdate/);
 assert.match(native, /export function applyUpdate/);
 assert.match(native, /api\.github\.com\/repos\/luanwolf\/completeDiscordQuest\/commits\/main/);
-assert.match(native, /installed-sha\.txt/);
 assert.match(native, /vencord-root\.txt/);
+assert.match(native, /readGitHead/);
+assert.match(native, /findPluginDir/);
 assert.match(native, /CDQ_YES/);
 assert.match(native, /-WindowStyle", "Hidden"/);
 
@@ -29,5 +30,13 @@ function needsUpdate(local, remote) {
 assert.equal(needsUpdate("", "abc"), false);
 assert.equal(needsUpdate("abc", "abc"), false);
 assert.equal(needsUpdate("abc", "def"), true);
+
+function readGitHead(head, refContent) {
+    const line = head.trim();
+    if (line.startsWith("ref:")) return (refContent || "").trim();
+    return line;
+}
+assert.equal(readGitHead("ref: refs/heads/main\n", "abc\n"), "abc");
+assert.equal(readGitHead("deadbeef\n", ""), "deadbeef");
 
 console.log("updater.check.js ok");

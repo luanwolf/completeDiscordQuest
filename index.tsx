@@ -207,10 +207,12 @@ async function maybeAutoUpdate() {
     try {
         if (await Native.hasUpdate()) {
             notify("Atualizando o plugin. O Discord vai reiniciar.");
-            Native.applyUpdate();
+            if (!await Native.applyUpdate()) {
+                notify("Nao achei a pasta do Vencord pra atualizar.");
+            }
         }
     } catch (err) {
-        console.warn(err);
+        console.warn("CompleteDiscordQuest auto-update:", err);
     }
 }
 
