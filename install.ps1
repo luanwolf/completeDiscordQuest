@@ -1,24 +1,174 @@
-# CompleteDiscordQuest — instalador Windows
-# irm https://raw.githubusercontent.com/luanwolf/completeDiscordQuest/main/install.ps1 | iex
-#
-# ponytail: Node/Git portateis so x64. ARM usa emulacao. Vesktop nao tem inject —
-# depois do build, em Configuracoes do Vesktop > Vencord Location, aponte para <Vencord>\dist.
-# Trocar a pasta: $env:VENCORD_DIR='D:\Vencord'
+<#
+    CompleteDiscordQuest - instalador Windows
+
+    Encontra sozinho o Vencord de codigo fonte, instala o plugin, compila e injeta.
+    Se nao achar, clona o Vencord. Instala Git/Node/pnpm se faltar.
+
+    irm https://raw.githubusercontent.com/luanwolf/completeDiscordQuest/main/install.ps1 | iex
+
+    .\install.ps1 -Yes
+    $env:VENCORD_DIR='D:\Vencord'; irm ... | iex
+#>
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force } catch { }
 
-$VencordDir = if ($env:VENCORD_DIR) { $env:VENCORD_DIR } else { Join-Path $env:USERPROFILE 'Vencord' }
+$Yes = ($args -contains '-Yes') -or ($env:CDQ_YES -eq '1')
+$Source = $env:VENCORD_DIR
 $PluginRepo = 'https://github.com/luanwolf/completeDiscordQuest.git'
 $PluginName = 'completeDiscordQuest'
+$VencordGit = 'https://github.com/Vendicated/Vencord.git'
 $DepsDir = Join-Path $env:LOCALAPPDATA 'completeDiscordQuest\deps'
 $MinNodeMajor = 22
 $Ua = @{ 'User-Agent' = 'completeDiscordQuest-installer' }
+$DiscordNames = @('Discord', 'DiscordCanary', 'DiscordPTB')
+$script:PnpmVersion = ''
+$script:TuiBg = "$([char]27)[48;5;235m"
+$script:TuiFg = "$([char]27)[38;5;252m"
+$script:TuiAccent = "$([char]27)[38;5;75m"
+$script:TuiOk = "$([char]27)[38;5;114m"
+$script:TuiDim = "$([char]27)[38;5;240m"
+$script:TuiBold = "$([char]27)[1m"
+$script:TuiRset = "$([char]27)[0m"
 
-function Write-Step([string]$Msg) { Write-Host "`n==> $Msg" -ForegroundColor Cyan }
-function Die([string]$Msg) { Write-Host "`nERRO: $Msg" -ForegroundColor Red; exit 1 }
-function Has-Cmd([string]$Name) { $null -ne (Get-Command $Name -ErrorAction SilentlyContinue) }
+function Write-Step($text) { Write-Host "  [*] $text" -ForegroundColor DarkGray }
+function Write-Ok($text) { Write-Host "  [OK] $text" -ForegroundColor Green }
+function Write-Warn($text) { Write-Host "  [!] $text" -ForegroundColor Yellow }
+function Write-Err($text) { Write-Host "  [X] $text" -ForegroundColor Red }
+
+function Show-Banner {
+    Write-Host ''
+    Write-Host '  CompleteDiscordQuest' -ForegroundColor Cyan
+    Write-Host '  Completa missoes do Discord em segundo plano' -ForegroundColor DarkGray
+    Write-Host '  https://github.com/luanwolf/completeDiscordQuest' -ForegroundColor DarkGray
+    Write-Host ''
+}
+
+function Read-Escolha($prompt) {
+    try { return (Read-Host $prompt) }
+    catch { throw 'Este console nao aceita teclado. Abra um PowerShell normal e rode de novo.' }
+}
+
+function Test-JanelaTransitoria {
+    try {
+        $atual = Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop
+        $pai = Get-CimInstance Win32_Process -Filter "ProcessId=$($atual.ParentProcessId)" -ErrorAction Stop
+        return $pai.Name -eq 'explorer.exe'
+    } catch { return $false }
+}
+
+function Wait-AntesDeFechar {
+    if ($Yes) { return }
+    if (-not (Test-JanelaTransitoria)) { return }
+    Write-Host ''
+    Write-Host '  Pressione Enter para fechar esta janela.' -ForegroundColor DarkGray
+    try { [void][Console]::ReadLine() } catch { }
+}
+
+function Confirm-Action($question) {
+    if ($Yes) { return $true }
+    return (Read-Escolha "  $question [S/n]") -notmatch '^[nN]'
+}
+
+function Test-TuiAnsi {
+    try {
+        if (-not ('Win32.CdqConsole' -as [type])) {
+            Add-Type -Namespace Win32 -Name CdqConsole -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true)]
+public static extern IntPtr GetStdHandle(int nStdHandle);
+[DllImport("kernel32.dll", SetLastError = true)]
+public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+[DllImport("kernel32.dll", SetLastError = true)]
+public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+'@ -ErrorAction Stop
+        }
+        $h = [Win32.CdqConsole]::GetStdHandle(-11)
+        if ($h -eq [IntPtr]::Zero) { return $false }
+        $mode = [uint32]0
+        if (-not [Win32.CdqConsole]::GetConsoleMode($h, [ref]$mode)) { return $false }
+        if (($mode -band 0x0004) -eq 0x0004) { return $true }
+        [Win32.CdqConsole]::SetConsoleMode($h, ($mode -bor 0x0004)) | Out-Null
+        return $true
+    } catch { return $false }
+}
+
+function Test-TuiInteractive {
+    if ($Yes) { return $false }
+    if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) { return $false }
+    return (Test-TuiAnsi)
+}
+
+function Tui-HideCursor { Write-Host "$([char]27)[?25l" -NoNewline }
+function Tui-ShowCursor { Write-Host "$([char]27)[?25h" -NoNewline }
+function Tui-ClearBelow([int]$row) { Write-Host "$([char]27)[$row;0H$([char]27)[J" -NoNewline }
+
+function Tui-GetKey {
+    if ([Console]::KeyAvailable) {
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        while ([Console]::KeyAvailable -and $sw.ElapsedMilliseconds -lt 80) {
+            [void][Console]::ReadKey($true)
+        }
+    }
+    try {
+        $k = [Console]::ReadKey($true)
+        switch ($k.Key) {
+            'UpArrow'   { return 'up' }
+            'DownArrow' { return 'down' }
+            'Enter'     { return 'enter' }
+            'Escape'    { return 'esc' }
+            default {
+                if ($k.KeyChar -eq 'j') { return 'down' }
+                if ($k.KeyChar -eq 'k') { return 'up' }
+                if ($k.KeyChar -eq 'q') { return 'esc' }
+                return 'other'
+            }
+        }
+    } catch { return 'other' }
+}
+
+function Tui-Menu([string]$title, [string[]]$items) {
+    if (-not (Test-TuiInteractive)) { return 0 }
+    $sel = 0
+    $n = $items.Count
+    Tui-HideCursor
+    try {
+        while ($true) {
+            Tui-ClearBelow 1
+            Write-Host "`r" -NoNewline
+            $top = '─' * (62 - 8)
+            Write-Host "$($script:TuiBg)$($script:TuiRset)┌─ $($script:TuiAccent)$title$($script:TuiRset) ─$($script:TuiDim)$top$($script:TuiRset)" -NoNewline
+            Write-Host ''
+            for ($i = 0; $i -lt $n; $i++) {
+                $txt = $items[$i]
+                $pad = ' ' * [Math]::Max(0, (62 - 6 - $txt.Length))
+                if ($i -eq $sel) {
+                    Write-Host "$($script:TuiBg)│ $($script:TuiAccent)●$($script:TuiRset) $($script:TuiBold)$txt$($script:TuiRset)$pad │$($script:TuiRset)" -NoNewline
+                } else {
+                    Write-Host "$($script:TuiBg)│ $($script:TuiDim)○$($script:TuiRset) $txt$pad │$($script:TuiRset)" -NoNewline
+                }
+                Write-Host ''
+            }
+            Write-Host "$($script:TuiBg)└$('─' * (62 - 2))┘$($script:TuiRset)" -NoNewline
+            Write-Host ''
+            Write-Host "  $($script:TuiDim)[↑↓] navegar  ·  [Enter] escolher  ·  [Esc] cancelar$($script:TuiRset)"
+            $key = Tui-GetKey
+            switch ($key) {
+                'up'    { if ($sel -gt 0) { $sel-- } }
+                'down'  { if ($sel -lt $n - 1) { $sel++ } }
+                'enter' { break }
+                'esc'   { $sel = -1; break }
+            }
+            if ($key -eq 'enter' -or $key -eq 'esc') { break }
+        }
+    } finally { Tui-ShowCursor }
+    if ($sel -ge 0) { return $sel + 1 } else { return 0 }
+}
+
+function Has-Cmd([string]$Name) {
+    $null -ne (Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue)
+}
 
 function Refresh-Path {
     $env:Path = @(
@@ -28,7 +178,7 @@ function Refresh-Path {
 }
 
 function Add-UserPath([string]$Dir) {
-    if (-not (Test-Path $Dir)) { return }
+    if (-not (Test-Path -LiteralPath $Dir)) { return }
     $user = [Environment]::GetEnvironmentVariable('Path', 'User')
     if (-not $user) { $user = '' }
     $parts = $user -split ';' | Where-Object { $_ }
@@ -38,198 +188,413 @@ function Add-UserPath([string]$Dir) {
     Refresh-Path
 }
 
+function Resolve-Native([string]$Name) {
+    if ($Name -match '[\\/]' -or $Name -match '\.(cmd|exe|bat|mjs)$') { return $Name }
+    foreach ($candidate in @("$Name.cmd", "$Name.exe", "$Name.bat", $Name)) {
+        $hit = Get-Command $candidate -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($hit -and $hit.Source -notlike '*.ps1') { return $hit.Source }
+    }
+    throw "Comando nao encontrado: $Name"
+}
+
 function Invoke-Exe {
-    param(
-        [Parameter(Mandatory)][string]$File,
-        [string[]]$CmdArgs = @()
-    )
+    param([Parameter(Mandatory)][string]$File, [string[]]$CmdArgs = @())
+    $resolved = Resolve-Native $File
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        & $File @CmdArgs
-        if ($LASTEXITCODE) { Die "$File $($CmdArgs -join ' ') falhou (codigo $LASTEXITCODE)" }
-    } finally {
-        $ErrorActionPreference = $old
+        & $resolved @CmdArgs
+        if ($LASTEXITCODE) { throw "$File $($CmdArgs -join ' ') falhou (codigo $LASTEXITCODE)" }
+    } finally { $ErrorActionPreference = $old }
+}
+
+function Get-EffectiveLocalApp {
+    if ($env:LOCALAPPDATA -and (Test-Path -LiteralPath $env:LOCALAPPDATA)) { return $env:LOCALAPPDATA }
+    try {
+        $shell = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+        if ($shell -and (Test-Path -LiteralPath $shell)) { return $shell }
+    } catch { }
+    if ($env:USERPROFILE) { return (Join-Path $env:USERPROFILE 'AppData\Local') }
+    return $env:LOCALAPPDATA
+}
+
+function Test-VencordSource([string]$Dir) {
+    if (-not $Dir -or -not (Test-Path -LiteralPath $Dir)) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $Dir 'package.json'))) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $Dir 'src\utils\types.ts'))) { return $false }
+    $raw = Get-Content -LiteralPath (Join-Path $Dir 'package.json') -Raw -ErrorAction SilentlyContinue
+    return [bool]($raw -match '"name"\s*:\s*"vencord"')
+}
+
+function Get-DiscordResources {
+    $found = @()
+    $localApp = Get-EffectiveLocalApp
+    if (-not $localApp) { return $found }
+    foreach ($name in $DiscordNames) {
+        $root = Join-Path $localApp $name
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        $apps = Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^app-[0-9]' } |
+            Sort-Object -Descending -Property @{ Expression = {
+                try { [version]($_.Name -replace '^app-', '') } catch { [version]'0.0.0' }
+            } }
+        foreach ($app in $apps) {
+            $resources = Join-Path $app.FullName 'resources'
+            $asar = Join-Path $resources 'app.asar'
+            $orig = Join-Path $resources '_app.asar'
+            if ((Test-Path -LiteralPath $asar) -or (Test-Path -LiteralPath $orig)) { $found += $resources }
+        }
     }
+    return $found
+}
+
+function Get-InjectedPath($resources) {
+    if (-not $resources) { return $null }
+    $candidates = @()
+    $stub = Join-Path $resources 'app.asar'
+    if (Test-Path -LiteralPath $stub) {
+        $item = Get-Item -LiteralPath $stub
+        if ($item -is [IO.FileInfo] -and $item.Length -lt 65536) {
+            $candidates += [IO.File]::ReadAllText($stub)
+        }
+    }
+    $index = Join-Path $resources 'app\index.js'
+    if (Test-Path -LiteralPath $index) {
+        $candidates += Get-Content -LiteralPath $index -Raw -ErrorAction SilentlyContinue
+    }
+    foreach ($text in $candidates) {
+        if (-not $text) { continue }
+        $match = [regex]::Match($text, 'require\("(.+?)"\)')
+        if ($match.Success) { return $match.Groups[1].Value -replace '\\\\', '\' }
+    }
+    return $null
+}
+
+function Find-CheckoutFromInjection {
+    foreach ($resources in Get-DiscordResources) {
+        $injected = Get-InjectedPath $resources
+        if (-not $injected) { continue }
+        $parent1 = Split-Path -Parent $injected
+        if (-not $parent1) { continue }
+        $root = Split-Path -Parent $parent1
+        if ($root -and (Test-VencordSource $root)) { return $root }
+    }
+    return $null
+}
+
+function Find-CheckoutOnDisk {
+    $fallback = Join-Path $env:USERPROFILE 'Vencord'
+    $hits = @()
+    $docs = [Environment]::GetFolderPath('MyDocuments')
+    $desktop = [Environment]::GetFolderPath('Desktop')
+    foreach ($dir in @(
+            $Source
+            $fallback
+            (Join-Path $docs 'Vencord')
+            (Join-Path $desktop 'Vencord')
+            (Join-Path $env:USERPROFILE 'Downloads\Vencord')
+            (Join-Path $env:USERPROFILE 'source\Vencord')
+            (Join-Path $env:USERPROFILE 'src\Vencord')
+            (Join-Path $env:USERPROFILE 'dev\Vencord')
+            (Join-Path $env:USERPROFILE 'Projects\Vencord')
+            (Join-Path $env:USERPROFILE 'git\Vencord')
+        )) {
+        if ((Test-VencordSource $dir) -and ($hits -notcontains $dir)) { $hits += $dir }
+    }
+
+    $roots = @($env:USERPROFILE, $docs, $desktop)
+    foreach ($sub in @('Documents', 'Desktop', 'Downloads', 'dev', 'repos', 'projects', 'git', 'source')) {
+        $roots += (Join-Path $env:USERPROFILE $sub)
+    }
+    $roots = $roots | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
+    foreach ($root in $roots) {
+        $found = @(Get-ChildItem -LiteralPath $root -Directory -Filter 'Vencord' -ErrorAction SilentlyContinue)
+        foreach ($item in $found) {
+            if ($item.FullName -match '\\AppData\\') { continue }
+            if ((Test-VencordSource $item.FullName) -and ($hits -notcontains $item.FullName)) {
+                $hits += $item.FullName
+            }
+        }
+    }
+
+    if ($hits.Count -eq 0) { return $null }
+    $withPlugin = $hits | Where-Object {
+        Test-Path -LiteralPath (Join-Path $_ "src\userplugins\$PluginName")
+    } | Select-Object -First 1
+    if ($withPlugin) { return $withPlugin }
+    return $hits[0]
+}
+
+function Find-VencordSource {
+    if ($Source) {
+        if (Test-VencordSource $Source) { return $Source }
+        if (-not (Test-Path -LiteralPath $Source)) { return $Source }
+        throw "VENCORD_DIR nao e um Vencord de codigo fonte: $Source"
+    }
+    $fromDiscord = Find-CheckoutFromInjection
+    if ($fromDiscord) { return $fromDiscord }
+    return (Find-CheckoutOnDisk)
+}
+
+function Show-Status($root) {
+    $discord = @(Get-DiscordResources).Count
+    $vesktop = Test-Path -LiteralPath (Join-Path (Get-EffectiveLocalApp) 'vesktop')
+
+    Write-Host '  Detectado:' -ForegroundColor White
+    if ($discord -gt 0) { Write-Host "    Discord   instalado ($discord versao(oes))" -ForegroundColor DarkGray }
+    elseif ($vesktop) { Write-Host '    Discord   Vesktop' -ForegroundColor DarkGray }
+    else { Write-Host '    Discord   nao encontrado' -ForegroundColor Yellow }
+
+    if ($root) {
+        Write-Host "    Fonte     $root" -ForegroundColor DarkGray
+        $plugin = Join-Path $root "src\userplugins\$PluginName"
+        if (Test-Path -LiteralPath $plugin) { Write-Host '    Plugin    ja instalado' -ForegroundColor Green }
+        else { Write-Host '    Plugin    nao instalado' -ForegroundColor DarkGray }
+    } else {
+        Write-Host '    Fonte     nao encontrado (vou clonar o Vencord)' -ForegroundColor DarkGray
+    }
+    Write-Host ''
 }
 
 function Get-NodeMajor {
     if (-not (Has-Cmd node)) { return 0 }
-    $raw = & node -v 2>$null
+    $raw = & (Resolve-Native 'node') -v 2>$null
     if ($raw -match 'v(\d+)') { return [int]$Matches[1] }
     return 0
 }
 
+function Test-Pnpm {
+    if (-not (Has-Cmd pnpm)) { return $false }
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $found = & (Resolve-Native 'pnpm') --version 2>$null
+        if ($LASTEXITCODE -ne 0) { return $false }
+        $script:PnpmVersion = ($found | Select-Object -First 1)
+        return $true
+    } catch { return $false }
+    finally { $ErrorActionPreference = $old }
+}
+
 function Install-Winget([string]$Id) {
     if (-not (Has-Cmd winget)) { return $false }
-    Write-Host "    winget $Id"
+    Write-Step "winget install $Id"
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
         & winget install -e --id $Id --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
         Refresh-Path
-        $pfNode = 'C:\Program Files\nodejs'
-        if ((Test-Path (Join-Path $pfNode 'node.exe')) -and ($env:Path -notlike "*$pfNode*")) {
-            $env:Path = "$pfNode;$env:Path"
-        }
-        $gitCmd = 'C:\Program Files\Git\cmd'
-        if ((Test-Path (Join-Path $gitCmd 'git.exe')) -and ($env:Path -notlike "*$gitCmd*")) {
-            $env:Path = "$gitCmd;$env:Path"
+        foreach ($extra in @('C:\Program Files\nodejs', 'C:\Program Files\Git\cmd')) {
+            if ((Test-Path -LiteralPath $extra) -and ($env:Path -notlike "*$extra*")) {
+                $env:Path = "$extra;$env:Path"
+            }
         }
         return $true
-    } catch {
-        return $false
-    } finally {
-        $ErrorActionPreference = $old
-    }
+    } catch { return $false }
+    finally { $ErrorActionPreference = $old }
 }
 
 function Install-PortableNode {
-    Write-Host '    baixando Node portatil (nodejs.org)'
+    Write-Step 'baixando Node portatil (nodejs.org)'
     $idx = Invoke-RestMethod 'https://nodejs.org/dist/index.json'
     $rel = $idx | Where-Object { $_.lts } | Select-Object -First 1
-    if (-not $rel) { Die 'Nao achei um Node LTS em nodejs.org' }
+    if (-not $rel) { throw 'Nao achei um Node LTS em nodejs.org' }
     $ver = $rel.version
     $zipName = "node-$ver-win-x64.zip"
     $zip = Join-Path $env:TEMP $zipName
     Invoke-WebRequest "https://nodejs.org/dist/$ver/$zipName" -OutFile $zip -UseBasicParsing
     $dest = Join-Path $DepsDir 'node'
-    if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+    if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $DepsDir | Out-Null
     $extracted = Join-Path $DepsDir "node-$ver-win-x64"
-    if (Test-Path $extracted) { Remove-Item $extracted -Recurse -Force }
+    if (Test-Path -LiteralPath $extracted) { Remove-Item -LiteralPath $extracted -Recurse -Force }
     Expand-Archive $zip -DestinationPath $DepsDir -Force
     Rename-Item $extracted 'node'
-    Remove-Item $zip -Force
+    Remove-Item -LiteralPath $zip -Force
     Add-UserPath $dest
 }
 
 function Install-PortableGit {
-    Write-Host '    baixando MinGit (git-for-windows)'
+    Write-Step 'baixando MinGit (git-for-windows)'
     $rel = Invoke-RestMethod 'https://api.github.com/repos/git-for-windows/git/releases/latest' -Headers $Ua
     $asset = $rel.assets | Where-Object { $_.name -match '^MinGit-.*-64-bit\.zip$' -and $_.name -notmatch 'busybox' } | Select-Object -First 1
-    if (-not $asset) { Die 'Nao achei MinGit na release do git-for-windows' }
+    if (-not $asset) { throw 'Nao achei MinGit na release do git-for-windows' }
     $zip = Join-Path $env:TEMP $asset.name
     Invoke-WebRequest $asset.browser_download_url -OutFile $zip -UseBasicParsing -Headers $Ua
     $dest = Join-Path $DepsDir 'git'
-    if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+    if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
     Expand-Archive $zip -DestinationPath $dest -Force
-    Remove-Item $zip -Force
+    Remove-Item -LiteralPath $zip -Force
     Add-UserPath (Join-Path $dest 'cmd')
 }
 
-function Ensure-Git {
-    if (Has-Cmd git) { return }
-    Write-Step 'Git nao encontrado — instalando'
-    [void](Install-Winget 'Git.Git')
-    if (Has-Cmd git) { return }
-    Install-PortableGit
-    if (-not (Has-Cmd git)) { Die 'Nao consegui instalar o Git. Instale de https://git-scm.com/download/win e rode de novo.' }
-}
+function Install-Toolchain {
+    if (-not (Has-Cmd git)) {
+        Write-Warn 'Git nao esta no PATH'
+        [void](Install-Winget 'Git.Git')
+        if (-not (Has-Cmd git)) { Install-PortableGit }
+        if (-not (Has-Cmd git)) { throw 'Instale o Git em https://git-scm.com/download/win e rode de novo.' }
+        Write-Ok 'Git pronto'
+    }
 
-function Ensure-Node {
-    if ((Get-NodeMajor) -ge $MinNodeMajor) { return }
-    Write-Step "Node $($MinNodeMajor)+ nao encontrado — instalando"
-    [void](Install-Winget 'OpenJS.NodeJS.LTS')
-    if ((Get-NodeMajor) -ge $MinNodeMajor) { return }
-    Install-PortableNode
     if ((Get-NodeMajor) -lt $MinNodeMajor) {
-        Die "Precisa de Node $MinNodeMajor+. Instale em https://nodejs.org/ e rode de novo."
+        Write-Warn "Node $MinNodeMajor+ nao esta no PATH"
+        [void](Install-Winget 'OpenJS.NodeJS.LTS')
+        if ((Get-NodeMajor) -lt $MinNodeMajor) { Install-PortableNode }
+        if ((Get-NodeMajor) -lt $MinNodeMajor) { throw "Instale Node $MinNodeMajor+ em https://nodejs.org/ e rode de novo." }
+        Write-Ok "Node $(Get-NodeMajor) pronto"
     }
-}
 
-function Ensure-Pnpm {
-    if (Has-Cmd pnpm) { return }
-    Write-Step 'pnpm nao encontrado — instalando'
-    if (Has-Cmd corepack) {
-        $old = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try { & corepack enable | Out-Null } catch { }
-        $ErrorActionPreference = $old
-        Refresh-Path
-        if (Has-Cmd pnpm) { return }
+    if (-not (Test-Pnpm)) {
+        Write-Step 'preparando pnpm'
+        if (Has-Cmd corepack) {
+            $old = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                $corepack = Get-Command corepack.cmd -CommandType Application -ErrorAction SilentlyContinue
+                if ($corepack) { & $corepack.Source disable pnpm 2>$null | Out-Null }
+            } catch { }
+            $ErrorActionPreference = $old
+            Refresh-Path
+        }
+        if (-not (Test-Pnpm)) {
+            $pnpmRoot = Join-Path $DepsDir 'pnpm'
+            New-Item -ItemType Directory -Force -Path $pnpmRoot | Out-Null
+            Invoke-Exe -File npm -CmdArgs @('install', '--prefix', $pnpmRoot, 'pnpm')
+            Add-UserPath (Join-Path $pnpmRoot 'node_modules\.bin')
+        }
+        if (-not (Test-Pnpm)) { throw 'Nao consegui deixar o pnpm funcionando. Rode: npm install -g pnpm' }
     }
-    $pnpmRoot = Join-Path $DepsDir 'pnpm'
-    New-Item -ItemType Directory -Force -Path $pnpmRoot | Out-Null
-    Invoke-Exe -File npm -CmdArgs @('install', '--prefix', $pnpmRoot, 'pnpm')
-    Add-UserPath (Join-Path $pnpmRoot 'node_modules\.bin')
-    if (-not (Has-Cmd pnpm)) { Die 'Nao consegui instalar pnpm.' }
+    Write-Ok "pnpm $script:PnpmVersion"
 }
 
 function Ensure-Repo([string]$Url, [string]$Dest) {
-    if (Test-Path (Join-Path $Dest '.git')) {
-        Write-Host "    atualizando $Dest"
+    if (Test-Path -LiteralPath (Join-Path $Dest '.git')) {
+        Write-Step "atualizando $Dest"
         Invoke-Exe -File git -CmdArgs @('-C', $Dest, 'pull', '--ff-only')
+        Write-Ok 'repositorio atualizado'
         return
     }
-    if (Test-Path $Dest) {
-        Write-Host "    ja existe (sem git): $Dest"
+    if (Test-Path -LiteralPath $Dest) {
+        Write-Ok "ja existe (sem git): $Dest"
         return
     }
-    New-Item -ItemType Directory -Force -Path (Split-Path $Dest) | Out-Null
+    $parent = Split-Path $Dest
+    if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+    Write-Step "git clone $Url"
     Invoke-Exe -File git -CmdArgs @('clone', '--depth', '1', $Url, $Dest)
+    Write-Ok "clonado em $Dest"
 }
 
-$admin = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-if ($admin.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Die 'Nao rode como Administrador. Abra o PowerShell normal (sem "Executar como administrador").'
-}
+function Select-Target($found) {
+    $fallback = Join-Path $env:USERPROFILE 'Vencord'
+    if ($Source) { return $Source }
+    if (-not $found) { return $fallback }
+    if ($Yes) { return $found }
 
-$discordRoot = @(
-    'Discord', 'DiscordCanary', 'DiscordPTB' |
-        ForEach-Object { Join-Path $env:LOCALAPPDATA $_ } |
-        Where-Object { Test-Path $_ }
-)
-$vesktop = Test-Path (Join-Path $env:LOCALAPPDATA 'vesktop')
-if ($discordRoot.Count -eq 0 -and -not $vesktop) {
-    Die 'Discord (ou Vesktop) nao encontrado. Instale o Discord e rode o script de novo.'
-}
-
-Write-Host ''
-Write-Host 'CompleteDiscordQuest — instalador' -ForegroundColor Magenta
-Write-Host '  1. Git e Node 22+ se faltar'
-Write-Host "  2. Vencord em $VencordDir"
-Write-Host '  3. plugin em src\userplugins'
-Write-Host '  4. pnpm build + inject no Discord'
-Write-Host ''
-$ans = Read-Host 'Continuar? [S/n]'
-if ($ans -match '^[nN]') { Write-Host 'Cancelado.'; exit 0 }
-
-Ensure-Git
-Ensure-Node
-Ensure-Pnpm
-
-Write-Step "Vencord em $VencordDir"
-Ensure-Repo 'https://github.com/Vendicated/Vencord.git' $VencordDir
-
-$pluginDest = Join-Path $VencordDir "src\userplugins\$PluginName"
-Write-Step "plugin em $pluginDest"
-Ensure-Repo $PluginRepo $pluginDest
-
-Push-Location $VencordDir
-try {
-    Write-Step 'pnpm install'
-    Invoke-Exe -File pnpm -CmdArgs @('install', '--frozen-lockfile')
-
-    Write-Step 'pnpm build'
-    Invoke-Exe -File pnpm -CmdArgs @('build')
-
-    if ($discordRoot.Count -gt 0) {
-        Write-Step 'inject no Discord (--branch auto)'
-        Invoke-Exe -File node -CmdArgs @('scripts/runInstaller.mjs', '--', '--install', '--branch', 'auto')
-    } else {
-        Write-Host ''
-        Write-Host 'Vesktop: nao tem inject automatico.' -ForegroundColor Yellow
-        Write-Host "Abra o Vesktop > Configuracoes > Vencord Location e escolha:"
-        Write-Host "  $(Join-Path $VencordDir 'dist')"
+    $name = Split-Path -Leaf $found
+    if (Test-TuiInteractive) {
+        $tui = Tui-Menu 'Onde instalar?' @(
+            "Usar o $name que ja esta aqui"
+            'Baixar um Vencord novo em %USERPROFILE%\Vencord'
+        )
+        if ($tui -eq 2) { return $fallback }
+        if ($tui -eq 1) { return $found }
+        throw 'Cancelado.'
     }
-} finally {
-    Pop-Location
+
+    Write-Host '  Onde instalar?' -ForegroundColor White
+    Write-Host ''
+    Write-Host "    [1] Usar o $name que ja esta aqui" -ForegroundColor Green
+    Write-Host "        $found" -ForegroundColor DarkGray
+    Write-Host '    [2] Baixar um Vencord novo' -ForegroundColor Cyan
+    Write-Host "        $fallback" -ForegroundColor DarkGray
+    Write-Host ''
+    if ((Read-Escolha '  Escolha') -eq '2') { return $fallback }
+    return $found
+}
+
+function Invoke-Install {
+    $admin = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    if ($admin.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw 'Nao rode como Administrador. Abra o PowerShell normal (sem "Executar como administrador").'
+    }
+
+    $localApp = Get-EffectiveLocalApp
+    $discordRoot = @(Get-DiscordResources)
+    $vesktop = Test-Path -LiteralPath (Join-Path $localApp 'vesktop')
+    if ($discordRoot.Count -eq 0 -and -not $vesktop) {
+        throw 'Nao achei nenhum Discord instalado. Instale o Discord e rode de novo.'
+    }
+
+    $found = Find-VencordSource
+    Show-Status $found
+    $root = Select-Target $found
+
+    Write-Host '  Vou fazer:' -ForegroundColor White
+    Write-Host '    1. Git e Node 22+ se faltar' -ForegroundColor DarkGray
+    if (Test-VencordSource $root) {
+        Write-Host "    2. Reusar o Vencord em $root" -ForegroundColor DarkGray
+    } else {
+        Write-Host "    2. Clonar o Vencord em $root" -ForegroundColor DarkGray
+    }
+    Write-Host '    3. Instalar o plugin em src\userplugins' -ForegroundColor DarkGray
+    Write-Host '    4. Compilar e injetar no Discord' -ForegroundColor DarkGray
+    Write-Host ''
+    if (-not (Confirm-Action 'Pode seguir?')) { throw 'Cancelado.' }
+
+    Install-Toolchain
+
+    Write-Step "Vencord em $root"
+    if (Test-VencordSource $root) { Write-Ok 'reusando pasta existente' }
+    Ensure-Repo $VencordGit $root
+
+    $pluginDest = Join-Path $root "src\userplugins\$PluginName"
+    Write-Step "plugin em $pluginDest"
+    Ensure-Repo $PluginRepo $pluginDest
+
+    Push-Location -LiteralPath $root
+    try {
+        Write-Step 'Instalando dependencias (na primeira vez demora alguns minutos)'
+        Invoke-Exe -File pnpm -CmdArgs @('install', '--frozen-lockfile')
+        Write-Ok 'dependencias ok'
+
+        Write-Step 'Compilando'
+        Invoke-Exe -File pnpm -CmdArgs @('build')
+        Write-Ok 'build ok'
+
+        if ($discordRoot.Count -gt 0) {
+            Write-Step 'Injetando no Discord (--branch auto)'
+            Invoke-Exe -File node -CmdArgs @('scripts/runInstaller.mjs', '--', '--install', '--branch', 'auto')
+            Write-Ok 'inject ok'
+        } else {
+            Write-Warn 'Vesktop: nao tem inject automatico.'
+            Write-Host "  Em Configuracoes > Vencord Location, escolha:" -ForegroundColor DarkGray
+            Write-Host "  $(Join-Path $root 'dist')" -ForegroundColor White
+        }
+    } finally { Pop-Location }
+
+    Write-Host ''
+    Write-Ok 'Pronto.'
+    Write-Host '  1. Feche o Discord pela bandeja e abra de novo.' -ForegroundColor DarkGray
+    Write-Host '  2. Configuracoes > Vencord > Plugins > CompleteDiscordQuest > ligue.' -ForegroundColor DarkGray
+    Write-Host '  Na primeira vez aparece um aviso de risco.' -ForegroundColor DarkGray
+}
+
+Show-Banner
+try {
+    Invoke-Install
+} catch {
+    Write-Host ''
+    Write-Err $_.Exception.Message
+    $info = $_.InvocationInfo
+    if ($info -and $info.ScriptLineNumber) {
+        Write-Host "      linha $($info.ScriptLineNumber): $($info.Line.Trim())" -ForegroundColor DarkGray
+    }
+    Wait-AntesDeFechar
+    exit 1
 }
 
 Write-Host ''
-Write-Host 'Pronto.' -ForegroundColor Green
-Write-Host '1. Feche o Discord pela bandeja (icone) e abra de novo.'
-Write-Host '2. Configuracoes > Vencord > Plugins > CompleteDiscordQuest > ligue.'
-Write-Host 'Na primeira vez aparece um aviso de risco.'
+Wait-AntesDeFechar

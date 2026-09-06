@@ -23,7 +23,7 @@ No PowerShell **sem** administrador:
 irm https://raw.githubusercontent.com/luanwolf/completeDiscordQuest/main/install.ps1 | iex
 ```
 
-O script instala Git e Node 22+ se faltar, clona o Vencord em `%USERPROFILE%\Vencord`, coloca este plugin em `src\userplugins`, roda `pnpm build` e injeta no Discord.
+O script instala Git e Node 22+ se faltar, reusa o Vencord de código fonte se já existir (senão clona em `%USERPROFILE%\Vencord`), coloca este plugin em `src\userplugins`, roda `pnpm build` e injeta no Discord.
 
 Outra pasta do Vencord: `$env:VENCORD_DIR='D:\Vencord'; irm https://raw.githubusercontent.com/luanwolf/completeDiscordQuest/main/install.ps1 | iex`
 
