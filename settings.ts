@@ -26,6 +26,12 @@ export default definePluginSettings({
         default: false,
         hidden: true
     },
+    panelButtonSeen: {
+        type: OptionType.BOOLEAN,
+        description: "Botão do painel já foi ligado uma vez.",
+        default: false,
+        hidden: true
+    },
     acceptQuestsAutomatically: {
         type: OptionType.BOOLEAN,
         displayName: "Aceitar missões sozinho",

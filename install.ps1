@@ -481,32 +481,41 @@ function Test-GitDirty([string]$Dest) {
 }
 
 function Ensure-Repo([string]$Url, [string]$Dest, [switch]$NoPull) {
+    $git = Resolve-Native 'git'
     if (Test-Path -LiteralPath (Join-Path $Dest '.git')) {
         if ($NoPull) {
             Write-Ok 'reusando checkout (sem git pull)'
             return
         }
         if (Test-GitDirty $Dest) {
-            Write-Warn "checkout com mudancas locais — sem git pull"
-            Write-Ok "reusando $Dest"
-            return
+            Write-Warn "checkout com mudancas locais — alinhando com o GitHub"
         }
         Write-Step "atualizando $Dest"
         $old = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         try {
-            & (Resolve-Native 'git') -C $Dest pull --ff-only
+            & $git -C $Dest fetch --depth 1 origin main
             if ($LASTEXITCODE) {
-                Write-Warn "git pull falhou — reusando o que ja esta em $Dest"
+                Write-Warn "git fetch falhou — reusando o que ja esta em $Dest"
                 return
             }
+            & $git -C $Dest reset --hard FETCH_HEAD
+            if ($LASTEXITCODE) {
+                Write-Warn "git reset falhou — reusando o que ja esta em $Dest"
+                return
+            }
+            & $git -C $Dest clean -fd
         } finally { $ErrorActionPreference = $old }
         Write-Ok 'repositorio atualizado'
         return
     }
     if (Test-Path -LiteralPath $Dest) {
-        Write-Ok "ja existe (sem git): $Dest"
-        return
+        if ($NoPull) {
+            Write-Ok "ja existe (sem git): $Dest"
+            return
+        }
+        Write-Warn "pasta sem git — clonando de novo em $Dest"
+        Remove-Item -LiteralPath $Dest -Recurse -Force
     }
     $parent = Split-Path $Dest
     if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
@@ -630,7 +639,7 @@ function Invoke-Install {
     } else {
         Write-Host "    2. Clonar o Vencord em $root" -ForegroundColor DarkGray
     }
-    Write-Host '    3. Instalar o plugin em src\userplugins' -ForegroundColor DarkGray
+    Write-Host '    3. Atualizar o plugin em src\userplugins a partir do GitHub' -ForegroundColor DarkGray
     Write-Host '    4. Compilar e injetar no Discord' -ForegroundColor DarkGray
     Write-Host '    5. Ativar o plugin e reabrir o Discord' -ForegroundColor DarkGray
     Write-Host ''

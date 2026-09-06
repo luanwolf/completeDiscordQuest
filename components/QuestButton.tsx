@@ -16,7 +16,7 @@ import { QuestsStore } from "../stores";
 
 const QuestIcon = findByCodeLazy("\"M7.5 21.7a8.95");
 const TopBarButton = findComponentByCodeLazy("badgePosition", "icon");
-const SettingsBarButton = findComponentByCodeLazy("keyboardShortcut", "positionKey");
+const PanelButton = findComponentByCodeLazy(".GREEN,positionKeyStemOverride:");
 const CountBadge = findComponentByCodeLazy("renderBadgeCount", "disableColor");
 
 function openQuestHome() {
@@ -196,25 +196,14 @@ export function QuestButton({ type }: { type: "top-bar" | "settings-bar"; }) {
         );
     } else if (type === "settings-bar") {
         return (
-            <SettingsBarButton
+            <PanelButton
                 tooltipText={tooltip}
-                onContextMenu={openQuestOverview}
+                icon={QuestIcon}
                 onClick={openQuestHome}
-                disabled={false}
-                icon={undefined}
+                onContextMenu={openQuestOverview}
                 className={"quest-button " + className}
-            ><TopBarButton
-                    className={className}
-                    iconClassName={undefined}
-                    disabled={false}
-                    showBadge={showBadge}
-                    badgePosition={"bottom"}
-                    icon={QuestIcon}
-                    iconSize={20}
-                    onClick={openQuestHome}
-                    onContextMenu={openQuestOverview}
-                    hideOnClick={false}
-                /></SettingsBarButton>
+                redGlow={needsRoom}
+            />
         );
     }
 }

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import ErrorBoundary from "@components/ErrorBoundary";
 import definePlugin from "@utils/types";
 import { findByCodeLazy, findByPropsLazy } from "@webpack";
 import { FluxDispatcher, RestAPI, Toasts } from "@webpack/common";
@@ -63,10 +64,18 @@ export default definePlugin({
             }
         },
         {
-            find: "accountContainerRef:",
+            find: "#{intl::USER_PROFILE_ACCOUNT_POPOUT_BUTTON_A11Y_LABEL}",
             replacement: {
-                match: /children:\[(?=.{0,120}accountContainerRef:\i)/,
+                match: /children:\[(?=.{0,25}?accountContainerRef)/,
                 replace: "children:[$self.renderQuestButtonSettingsBar(),"
+            }
+        },
+        {
+            find: "#{intl::ACCOUNT_SPEAKING_WHILE_MUTED}",
+            noWarn: true,
+            replacement: {
+                match: /(className:\i\.buttons,.{0,80}?children:\[)/,
+                replace: "$1$self.renderQuestButtonSettingsBar(),"
             }
         },
         { // PTB Experimental
@@ -99,6 +108,11 @@ export default definePlugin({
         }
     ],
     start: () => {
+        if (!settings.store.panelButtonSeen) {
+            settings.store.showQuestsButtonSettingsBar = true;
+            settings.store.panelButtonSeen = true;
+        }
+
         if (!ensureHasAcceptedToUsePlugin()) {
             stopAllFarming();
             return;
@@ -119,9 +133,12 @@ export default definePlugin({
     },
 
     renderQuestButtonSettingsBar() {
-        if (settings.store.showQuestsButtonSettingsBar) {
-            return <QuestButton type="settings-bar" />;
-        }
+        if (!settings.store.showQuestsButtonSettingsBar) return null;
+        return (
+            <ErrorBoundary noop>
+                <QuestButton type="settings-bar" />
+            </ErrorBoundary>
+        );
     },
 
     renderQuestButtonBadges(questButton) {

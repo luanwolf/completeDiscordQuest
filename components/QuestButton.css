@@ -40,7 +40,3 @@
 .cdq-overview-muted {
     color: var(--text-muted);
 }
-
-.quest-button svg:has(> [mask^="url(#svg-mask-panel-button)"]) {
-    display: none;
-}
