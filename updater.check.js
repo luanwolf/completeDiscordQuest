@@ -12,14 +12,15 @@ assert.match(native, /api\.github\.com\/repos\/luanwolf\/completeDiscordQuest\/c
 assert.match(native, /vencord-root\.txt/);
 assert.match(native, /readGitHead/);
 assert.match(native, /findPluginDir/);
-assert.match(native, /run-update\.cmd/);
+assert.match(native, /run-update\.ps1/);
+assert.match(native, /Encoding UTF8/);
 assert.match(native, /CDQ_YES/);
 assert.match(index, /Atualizando o CompleteDiscordQuest/);
 
 assert.match(install, /installed-sha\.txt/);
 assert.match(install, /vencord-root\.txt/);
 assert.match(install, /ja esta na versao do GitHub/);
-assert.match(install, /param\(\[switch\]\$Yes\)/);
+assert.match(install, /RepoUpdated/);
 
 assert.match(settings, /autoUpdate:/);
 assert.match(index, /maybeAutoUpdate/);

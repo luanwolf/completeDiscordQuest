@@ -139,19 +139,23 @@ export function applyUpdate(_event: IpcMainInvokeEvent) {
     mkdirSync(dir, { recursive: true });
     const ps = join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
     const log = join(dir, "update.log");
-    const cmd = join(dir, "run-update.cmd");
-    writeFileSync(cmd, [
-        "@echo off",
-        "set CDQ_YES=1",
-        `set "VENCORD_DIR=${root}"`,
-        `echo [%date% %time%] start > "${log}"`,
-        `"${ps}" -NoProfile -ExecutionPolicy Bypass -File "${script}" -Yes >> "${log}" 2>&1`,
-        `echo [%date% %time%] exit %ERRORLEVEL% >> "${log}"`,
-    ].join("\r\n"), "utf8");
-    const child = spawn("cmd.exe", ["/c", cmd], {
+    writeFileSync(log, `[${new Date().toISOString()}] launch\n`, { flag: "a" });
+    const launcher = join(dir, "run-update.ps1");
+    const q = (s: string) => "'" + s.replace(/'/g, "''") + "'";
+    writeFileSync(launcher, [
+        "$ErrorActionPreference = 'Stop'",
+        "$env:CDQ_YES = '1'",
+        `$env:VENCORD_DIR = ${q(root)}`,
+        `Get-Content -LiteralPath ${q(script)} -Raw -Encoding UTF8 | Invoke-Expression`,
+    ].join("\r\n"), "ascii");
+    const child = spawn(ps, [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", launcher
+    ], {
         detached: true,
-        stdio: "ignore",
-        windowsHide: true,
+        stdio: ["ignore", "ignore", "ignore"],
+        windowsHide: false,
         cwd: root,
         env: spawnEnv(root)
     });

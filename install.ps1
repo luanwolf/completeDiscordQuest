@@ -9,14 +9,13 @@
     .\install.ps1 -Yes
     $env:VENCORD_DIR='D:\Vencord'; irm ... | iex
 #>
-param([switch]$Yes)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force } catch { }
 
-$Yes = [bool]$Yes -or ($env:CDQ_YES -eq '1') -or ($args -contains '-Yes')
+$Yes = ($args -contains '-Yes') -or ($env:CDQ_YES -eq '1')
 $Source = $env:VENCORD_DIR
 $PluginRepo = 'https://github.com/luanwolf/completeDiscordQuest.git'
 $PluginName = 'completeDiscordQuest'
