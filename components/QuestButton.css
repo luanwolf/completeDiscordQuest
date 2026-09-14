@@ -1,0 +1,42 @@
+.quest-button-enrollable>span[class*="iconBadge"] {
+    background-color: var(--status-danger);
+}
+
+.quest-button-enrolled>span[class*="iconBadge"] {
+    background-color: var(--status-warning);
+}
+
+.quest-button-claimable>span[class*="iconBadge"] {
+    background-color: var(--status-positive);
+}
+
+.quest-button-needs-room>span[class*="iconBadge"] {
+    background-color: var(--status-warning);
+}
+
+.quest-button.quest-button-needs-room {
+    box-shadow: inset 0 0 0 1px var(--status-warning);
+    border-radius: 8px;
+}
+
+.cdq-overview {
+    min-width: 240px;
+    text-align: left;
+}
+
+.cdq-overview-title {
+    font-weight: 600;
+    margin: 8px 0 4px;
+}
+
+.cdq-overview-row {
+    margin: 2px 0;
+}
+
+.cdq-overview-warn {
+    color: var(--status-warning);
+}
+
+.cdq-overview-muted {
+    color: var(--text-muted);
+}
