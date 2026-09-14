@@ -12,7 +12,7 @@ assert.match(src, /function Test-PnpmGlobal/);
 assert.match(src, /prefix -g/);
 assert.match(src, /Node \$MinNodeMajor\+ e obrigatorio/);
 assert.match(src, /pnpm global nao esta funcionando/);
-assert.match(src, /--allow-scripts=pnpm/);
+assert.match(src, /npm install -g pnpm --allow-scripts=pnpm/);
 assert.match(src, /Git e obrigatorio para instalar o Vencord/);
 assert.doesNotMatch(src, /npm',\s*'install',\s*'--prefix'/);
 assert.doesNotMatch(src, /OpenJS\.NodeJS\.LTS/);

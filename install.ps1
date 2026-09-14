@@ -454,7 +454,7 @@ function Install-Toolchain {
         throw "Node $MinNodeMajor+ e obrigatorio. Instale em https://nodejs.org/ e rode de novo."
     }
     if (-not (Test-PnpmGlobal)) {
-        throw 'pnpm global nao esta funcionando. Rode: npm install -g --allow-scripts=pnpm e abra um novo PowerShell.'
+        throw 'pnpm global nao esta funcionando. Rode: npm install -g pnpm --allow-scripts=pnpm e abra um novo PowerShell.'
     }
     Write-Ok "Node $(Get-NodeMajor) e pnpm $script:PnpmVersion prontos"
 }
