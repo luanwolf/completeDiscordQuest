@@ -9,7 +9,7 @@ assert.match(src, /src\\userplugins\\\$PluginName/);
 assert.match(src, /https:\/\/github\.com\/luanwolf\/completeDiscordQuest\.git/);
 assert.match(src, /pnpm.*install.*--frozen-lockfile/s);
 assert.match(src, /function Test-PnpmGlobal/);
-assert.match(src, /prefix -g/);
+assert.match(src, /return \(Test-Pnpm\)/);
 assert.match(src, /Node \$MinNodeMajor\+ e obrigatorio/);
 assert.match(src, /pnpm global nao esta funcionando/);
 assert.match(src, /npm install -g pnpm --allow-scripts=pnpm/);

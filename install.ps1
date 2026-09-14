@@ -378,17 +378,7 @@ function Test-Pnpm {
 }
 
 function Test-PnpmGlobal {
-    if (-not (Test-Pnpm)) { return $false }
-    $old = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $pnpmPath = [IO.Path]::GetFullPath((Resolve-Native 'pnpm'))
-        $npmPrefix = & (Resolve-Native 'npm') prefix -g 2>$null | Select-Object -First 1
-        if ($LASTEXITCODE -ne 0 -or -not $npmPrefix) { return $false }
-        $prefixPath = [IO.Path]::GetFullPath(("$npmPrefix").Trim()).TrimEnd('\') + '\'
-        return $pnpmPath.StartsWith($prefixPath, [StringComparison]::OrdinalIgnoreCase)
-    } catch { return $false }
-    finally { $ErrorActionPreference = $old }
+    return (Test-Pnpm)
 }
 
 function Install-Winget([string]$Id) {
