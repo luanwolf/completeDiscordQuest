@@ -382,9 +382,11 @@ function Test-PnpmGlobal {
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $globalRoot = & (Resolve-Native 'pnpm') root -g 2>$null | Select-Object -First 1
-        if ($LASTEXITCODE -ne 0 -or -not $globalRoot) { return $false }
-        return [bool](Test-Path -LiteralPath ("$globalRoot").Trim())
+        $pnpmPath = [IO.Path]::GetFullPath((Resolve-Native 'pnpm'))
+        $npmPrefix = & (Resolve-Native 'npm') prefix -g 2>$null | Select-Object -First 1
+        if ($LASTEXITCODE -ne 0 -or -not $npmPrefix) { return $false }
+        $prefixPath = [IO.Path]::GetFullPath(("$npmPrefix").Trim()).TrimEnd('\') + '\'
+        return $pnpmPath.StartsWith($prefixPath, [StringComparison]::OrdinalIgnoreCase)
     } catch { return $false }
     finally { $ErrorActionPreference = $old }
 }
@@ -452,7 +454,7 @@ function Install-Toolchain {
         throw "Node $MinNodeMajor+ e obrigatorio. Instale em https://nodejs.org/ e rode de novo."
     }
     if (-not (Test-PnpmGlobal)) {
-        throw 'pnpm global nao esta disponivel. Rode: npm install -g pnpm e abra um novo PowerShell.'
+        throw 'pnpm global nao esta funcionando. Rode: npm install -g --allow-scripts=pnpm e abra um novo PowerShell.'
     }
     Write-Ok "Node $(Get-NodeMajor) e pnpm $script:PnpmVersion prontos"
 }

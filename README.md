@@ -28,7 +28,7 @@ O script valida Git, Node 22+ e `pnpm` global antes de fazer qualquer alteraçã
 Antes de executar, instale Node 22+, Git e `pnpm` globalmente:
 
 ```powershell
-npm install -g pnpm
+npm install -g --allow-scripts=pnpm
 ```
 
 Outra pasta do Vencord: `$env:VENCORD_DIR='D:\Vencord'; irm https://raw.githubusercontent.com/luanwolf/completeDiscordQuest/main/install.ps1 | iex`
