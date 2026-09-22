@@ -33,17 +33,22 @@ assert.match(install, /Get-GitHead \$pluginDest/);
 assert.match(install, /\$localSha -eq \$wantSha/);
 assert.match(install, /FETCH_HEAD/);
 assert.match(install, /origin\/main/);
-assert.match(install, /if \(\$Yes\) \{ Start-Discord \}/);
+assert.match(install, /\$Yes -and -not \$script:RepoUpdated/);
+assert.match(install, /Test-InjectedAt/);
+assert.match(install, /GoLiveBypass/);
+assert.match(install, /Start-Discord/);
 assert.match(install, /update-ref HEAD FETCH_HEAD/);
 assert.match(install, /robocopy/);
 
-function shouldSkip(localSha, wantSha, distExists, repoUpdated) {
-    return !repoUpdated && Boolean(localSha) && Boolean(wantSha) && localSha === wantSha && distExists;
+function shouldSkip(yes, localSha, wantSha, distExists, repoUpdated, injectedOk) {
+    return Boolean(yes) && !repoUpdated && Boolean(localSha) && Boolean(wantSha) && localSha === wantSha && distExists && Boolean(injectedOk);
 }
-assert.equal(shouldSkip("3df25e8", "3302793", true, false), false);
-assert.equal(shouldSkip("3302793", "3302793", true, false), true);
-assert.equal(shouldSkip("3302793", "3302793", false, false), false);
-assert.equal(shouldSkip("3302793", "3302793", true, true), false);
+assert.equal(shouldSkip(false, "3302793", "3302793", true, false, true), false);
+assert.equal(shouldSkip(true, "3df25e8", "3302793", true, false, true), false);
+assert.equal(shouldSkip(true, "3302793", "3302793", true, false, true), true);
+assert.equal(shouldSkip(true, "3302793", "3302793", true, false, false), false);
+assert.equal(shouldSkip(true, "3302793", "3302793", false, false, true), false);
+assert.equal(shouldSkip(true, "3302793", "3302793", true, true, true), false);
 
 assert.match(settings, /autoUpdate:/);
 assert.match(index, /maybeAutoUpdate/);

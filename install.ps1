@@ -590,15 +590,31 @@ function Set-PluginEnabled([string]$root) {
     }
 }
 
+function Test-InjectedAt([string]$Root) {
+    if (-not $Root) { return $false }
+    $want = [IO.Path]::GetFullPath((Join-Path $Root 'dist'))
+    foreach ($resources in Get-DiscordResources) {
+        $injected = Get-InjectedPath $resources
+        if (-not $injected) { continue }
+        $parent = Split-Path -Parent $injected
+        if (-not $parent) { continue }
+        try {
+            if ([IO.Path]::GetFullPath($parent) -eq $want) { return $true }
+        } catch { }
+    }
+    return $false
+}
+
 function Stop-Discord {
-    if (-not (Get-Process -Name $DiscordNames -ErrorAction SilentlyContinue)) { return }
+    $names = @($DiscordNames) + @('GoLiveBypass')
+    if (-not (Get-Process -Name $names -ErrorAction SilentlyContinue)) { return }
     Write-Step 'Fechando o Discord'
-    Get-Process -Name $DiscordNames -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name $names -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     for ($i = 0; $i -lt 30; $i++) {
         Start-Sleep -Milliseconds 300
         if (-not (Get-Process -Name $DiscordNames -ErrorAction SilentlyContinue)) { return }
     }
-    throw 'O Discord nao fechou. Feche pelo icone na bandeja e rode de novo.'
+    throw 'O Discord nao fechou. Feche pelo icone na bandeja (e o GoLiveBypass, se tiver) e rode de novo.'
 }
 
 function Start-Discord {
@@ -674,11 +690,6 @@ function Invoke-Install {
     Write-Host ''
     if (-not (Confirm-Action 'Pode seguir?')) { throw 'Cancelado.' }
 
-    if ($Yes) {
-        Write-Step 'Fechando o Discord para atualizar'
-        Stop-Discord
-    }
-
     $gitCmd = Join-Path $env:ProgramFiles 'Git\cmd'
     if ($gitCmd -and (Test-Path -LiteralPath $gitCmd)) { $env:Path = "$gitCmd;$env:Path" }
 
@@ -695,16 +706,20 @@ function Invoke-Install {
     $localSha = Get-GitHead $pluginDest
     $wantSha = Get-GitHead $pluginDest 'FETCH_HEAD'
     if (-not $wantSha) { $wantSha = Get-GitHead $pluginDest 'origin/main' }
-    if (-not $script:RepoUpdated -and $localSha -and $wantSha -and $localSha -eq $wantSha -and (Test-Path -LiteralPath $dist)) {
+    $injectedOk = Test-InjectedAt $root
+    # Auto-update ($Yes): skip rebuild when SHA matches and Discord already points at this dist.
+    # Interactive irm always builds+injects — "Nada novo" used to leave a broken/wrong inject.
+    if ($Yes -and -not $script:RepoUpdated -and $localSha -and $wantSha -and $localSha -eq $wantSha -and (Test-Path -LiteralPath $dist) -and $injectedOk) {
         Save-InstallState $root $pluginDest
         Set-PluginEnabled $root
         Write-Ok 'plugin ja esta na versao do GitHub'
         Write-Host ''
         Write-Ok 'Pronto. Nada novo pra instalar.'
-        if ($Yes) { Start-Discord }
+        Start-Discord
         return
     }
 
+    Stop-Discord
     Push-Location -LiteralPath $root
     try {
         Write-Step 'Instalando dependencias (na primeira vez demora alguns minutos)'
@@ -726,9 +741,9 @@ function Invoke-Install {
         }
     } finally { Pop-Location }
 
-    Stop-Discord
     Write-Step 'Ativando o plugin'
     Set-PluginEnabled $root
+    Save-InstallState $root $pluginDest
     Start-Discord
 
     Write-Host ''
