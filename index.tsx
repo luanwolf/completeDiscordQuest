@@ -7,7 +7,7 @@
 import ErrorBoundary from "@components/ErrorBoundary";
 import definePlugin, { PluginNative } from "@utils/types";
 import { findByCodeLazy, findByPropsLazy } from "@webpack";
-import { FluxDispatcher, RestAPI, Toasts } from "@webpack/common";
+import { FluxDispatcher, RestAPI, showToast } from "@webpack/common";
 
 import { QuestButton, QuestsCount } from "./components/QuestButton";
 import { nextConsentAction } from "./consent";
@@ -219,13 +219,9 @@ async function maybeAutoUpdate() {
 
 function notify(message: string) {
     try {
-        Toasts.show({
-            message,
-            id: Toasts.genId(),
-            type: Toasts.Type.MESSAGE,
-        });
-    } catch {
-        console.log(message);
+        showToast({ text: message });
+    } catch (err) {
+        console.warn("CompleteDiscordQuest notification failed:", message, err);
     }
 }
 

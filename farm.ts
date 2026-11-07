@@ -30,8 +30,10 @@ export function isClaimable(quest: { userStatus?: { completedAt?: string | null;
 
 export type ClaimedEntry = { id: string; name: string; at: string; };
 
+type QuestTasks = Partial<Record<"STREAM_ON_DESKTOP" | "PLAY_ACTIVITY" | "WATCH_VIDEO" | "WATCH_VIDEO_ON_MOBILE" | "PLAY_ON_DESKTOP", unknown>>;
+
 export function getActiveTaskName(quest: {
-    config?: { taskConfig?: { tasks?: Record<string, unknown>; }; taskConfigV2?: { tasks?: Record<string, unknown>; }; };
+    config?: { taskConfig?: { tasks?: QuestTasks; }; taskConfigV2?: { tasks?: QuestTasks; }; };
 }) {
     const tasks = quest.config?.taskConfig?.tasks || quest.config?.taskConfigV2?.tasks;
     if (!tasks) return null;
@@ -53,8 +55,8 @@ export function listVoiceRoomQuests(quests: Array<{
     userStatus?: { enrolledAt?: string | null; completedAt?: string | null; };
     config?: {
         messages?: { questName?: string; };
-        taskConfig?: { tasks?: Record<string, unknown>; };
-        taskConfigV2?: { tasks?: Record<string, unknown>; };
+        taskConfig?: { tasks?: QuestTasks; };
+        taskConfigV2?: { tasks?: QuestTasks; };
     };
 }>) {
     const out: Array<{ name: string; task: string; }> = [];

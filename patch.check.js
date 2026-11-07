@@ -21,5 +21,8 @@ assert.match(src, /showQuestsButtonSettingsBar = true/);
 assert.match(button, /HEADER_BAR_BADGE_BOTTOM/);
 assert.doesNotMatch(css, /svg-mask-panel-button/);
 assert.match(settings, /panelButtonSeen:/);
+assert.match(src, /import \{[^}]*\bshowToast\b[^}]*\} from "@webpack\/common"/);
+assert.match(src, /showToast\(\{ text: message \}\)/);
+assert.doesNotMatch(src, /\bToasts\b/);
 
 console.log("patch.check.js ok");
