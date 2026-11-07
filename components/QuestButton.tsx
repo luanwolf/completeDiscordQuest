@@ -10,8 +10,7 @@ import { Flex } from "@components/Flex";
 import { findByCodeLazy, findComponentByCodeLazy } from "@webpack";
 import { Alerts, NavigationRouter, Tooltip, useEffect, useState } from "@webpack/common";
 
-import { listVoiceRoomQuests, readClaimedLog } from "../farm";
-import settings from "../settings";
+import { listVoiceRoomQuests } from "../farm";
 import { QuestsStore } from "../stores";
 
 const QuestIcon = findByCodeLazy("\"M7.5 21.7a8.95");
@@ -42,23 +41,14 @@ function questsStatus() {
 }
 
 function QuestOverviewBody() {
-    const claimed = readClaimedLog(settings.store.claimedLog);
     const voice = listVoiceRoomQuests([...QuestsStore.quests.values()]);
     return (
         <div className="cdq-overview">
-            {voice.length > 0 && (
-                <>
-                    <div className="cdq-overview-title">Precisa de call</div>
-                    {voice.map(v => (
-                        <div key={v.name} className="cdq-overview-row cdq-overview-warn">⚠ {v.name} ({v.task})</div>
-                    ))}
-                </>
-            )}
-            <div className="cdq-overview-title">Resgatadas pelo plugin</div>
-            {claimed.length === 0 ? (
-                <div className="cdq-overview-muted">Nenhuma ainda.</div>
-            ) : claimed.map(c => (
-                <div key={c.id} className="cdq-overview-row">{c.name}</div>
+            <div className="cdq-overview-title">Precisa de call</div>
+            {voice.length === 0 ? (
+                <div className="cdq-overview-muted">Nenhuma.</div>
+            ) : voice.map(v => (
+                <div key={v.name} className="cdq-overview-row cdq-overview-warn">⚠ {v.name} ({v.task})</div>
             ))}
         </div>
     );
@@ -174,7 +164,7 @@ export function QuestButton({ type }: { type: "top-bar" | "settings-bar"; }) {
         : state.enrollable ? `${state.enrollable} para aceitar`
             : state.enrolled ? `${state.enrolled} em andamento`
                 : state.claimable ? `${state.claimable} para resgatar`
-                    : "Missões — botão direito: resgates";
+                    : "Missões — botão direito: precisa de call";
     const showBadge = needsRoom || state.enrollable > 0 || state.enrolled > 0 || state.claimable > 0;
 
     if (type === "top-bar") {

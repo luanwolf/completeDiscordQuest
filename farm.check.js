@@ -9,8 +9,9 @@ assert.match(src, /return attempts >= max/);
 assert.match(src, /privates\[0\]\?\.id/);
 assert.match(src, /completedAt && !quest\.userStatus\?\.claimedAt/);
 assert.match(src, /listVoiceRoomQuests/);
-assert.match(src, /appendClaimedLog/);
-assert.match(index, /description: "v1\.0\.2 —/);
+assert.doesNotMatch(src, /ClaimedLog/);
+assert.doesNotMatch(index, /maybeAutoUpdate|pluginHelpers|ClaimedLog/);
+assert.match(index, /description: "v1\.0\.3 —/);
 assert.match(index, /case "WATCH_VIDEO":[\s\S]*?const speed = 2;/);
 assert.match(index, /case "PLAY_ACTIVITY":[\s\S]*?setTimeout\(resolve, 2 \* 1000\)/);
 
@@ -51,17 +52,6 @@ function questNeedsVoiceRoom(taskName) {
 function listVoiceRoomQuests(quests) {
     return quests.filter(q => q.userStatus?.enrolledAt && !q.userStatus?.completedAt && questNeedsVoiceRoom(getActiveTaskName(q)));
 }
-function readClaimedLog(raw) {
-    try {
-        const parsed = JSON.parse(raw || "[]");
-        return Array.isArray(parsed) ? parsed.filter(e => e && typeof e.id === "string") : [];
-    } catch { return []; }
-}
-function appendClaimedLog(raw, entry, max = 20) {
-    const list = readClaimedLog(raw).filter(e => e.id !== entry.id);
-    list.unshift(entry);
-    return JSON.stringify(list.slice(0, max));
-}
 
 assert.equal(questNeedsVoiceRoom("STREAM_ON_DESKTOP"), true);
 assert.equal(questNeedsVoiceRoom("WATCH_VIDEO"), false);
@@ -69,8 +59,5 @@ assert.equal(listVoiceRoomQuests([
     { userStatus: { enrolledAt: "1" }, config: { taskConfigV2: { tasks: { STREAM_ON_DESKTOP: {} } }, messages: { questName: "Go Live" } } },
     { userStatus: { enrolledAt: "1", completedAt: "2" }, config: { taskConfigV2: { tasks: { PLAY_ACTIVITY: {} } } } },
 ]).length, 1);
-assert.equal(readClaimedLog("not json").length, 0);
-const log = JSON.parse(appendClaimedLog("[]", { id: "1", name: "A", at: "x" }));
-assert.equal(log[0].name, "A");
 
 console.log("farm.check ok");

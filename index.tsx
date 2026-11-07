@@ -5,17 +5,15 @@
  */
 
 import ErrorBoundary from "@components/ErrorBoundary";
-import definePlugin, { PluginNative } from "@utils/types";
+import definePlugin from "@utils/types";
 import { findByCodeLazy, findByPropsLazy } from "@webpack";
 import { FluxDispatcher, RestAPI, showToast } from "@webpack/common";
 
 import { QuestButton, QuestsCount } from "./components/QuestButton";
 import { nextConsentAction } from "./consent";
-import { appendClaimedLog, isClaimable, nextRetryDelay, pickPlayActivityChannel, shouldGiveUpRetry } from "./farm";
+import { isClaimable, nextRetryDelay, pickPlayActivityChannel, shouldGiveUpRetry } from "./farm";
 import settings from "./settings";
 import { ChannelStore, GuildChannelStore, QuestsStore, RunningGameStore } from "./stores";
-
-const Native = VencordNative.pluginHelpers?.CompleteDiscordQuest as PluginNative<typeof import("./native")> | undefined;
 
 declare const IS_DISCORD_DESKTOP: boolean | undefined;
 declare const IS_VESKTOP: boolean | undefined;
@@ -48,7 +46,7 @@ function isDiscordDesktop() {
 
 export default definePlugin({
     name: "CompleteDiscordQuest",
-    description: "v1.0.2 — Completa várias missões do Discord ao mesmo tempo, em segundo plano.",
+    description: "v1.0.3 — Completa várias missões do Discord ao mesmo tempo, em segundo plano.",
     authors: [{
         name: "heyash",
         id: 664977206505897984n
@@ -110,8 +108,6 @@ export default definePlugin({
         }
     ],
     start: () => {
-        void maybeAutoUpdate();
-
         if (!settings.store.panelButtonSeen) {
             settings.store.showQuestsButtonSettingsBar = true;
             settings.store.panelButtonSeen = true;
@@ -199,22 +195,6 @@ function isQuestEligibleForFarming(quest: QuestValue): boolean {
             || reward.type === 4 && settings.store.farmVirtualCurrency
             || reward.type === 5 && settings.store.farmFractionalPremium);
     });
-}
-
-async function maybeAutoUpdate() {
-    if (!settings.store.autoUpdate) return;
-    if (!Native) return;
-    await new Promise(r => setTimeout(r, 8000));
-    try {
-        if (await Native.hasUpdate()) {
-            notify("Atualizando o CompleteDiscordQuest. O Discord irá reiniciar em alguns instantes.");
-            if (!await Native.applyUpdate()) {
-                notify("Nao achei a pasta do Vencord pra atualizar.");
-            }
-        }
-    } catch (err) {
-        console.warn("CompleteDiscordQuest auto-update:", err);
-    }
 }
 
 function notify(message: string) {
@@ -354,11 +334,6 @@ function claimQuest(quest: QuestValue) {
         },
     }).then(() => {
         console.log("Claimed quest:", questName);
-        settings.store.claimedLog = appendClaimedLog(settings.store.claimedLog, {
-            id: quest.id,
-            name: questName,
-            at: new Date().toISOString(),
-        });
     }).catch(err => {
         console.error("Failed to claim quest:", questName, err);
         claimingQuest.delete(quest.id);

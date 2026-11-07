@@ -470,14 +470,6 @@ function Get-GitHead([string]$Dest, [string]$Rev = 'HEAD') {
     finally { $ErrorActionPreference = $old }
 }
 
-function Save-InstallState([string]$Root, [string]$PluginDest) {
-    $dir = Join-Path $env:LOCALAPPDATA 'completeDiscordQuest'
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    Save-Text (Join-Path $dir 'vencord-root.txt') $Root
-    $sha = Get-GitHead $PluginDest
-    if ($sha) { Save-Text (Join-Path $dir 'installed-sha.txt') $sha }
-}
-
 function Ensure-Repo([string]$Url, [string]$Dest, [switch]$NoPull) {
     $git = Resolve-Native 'git'
     if (Test-Path -LiteralPath (Join-Path $Dest '.git')) {
@@ -710,7 +702,6 @@ function Invoke-Install {
     # Auto-update ($Yes): skip rebuild when SHA matches and Discord already points at this dist.
     # Interactive irm always builds+injects — "Nada novo" used to leave a broken/wrong inject.
     if ($Yes -and -not $script:RepoUpdated -and $localSha -and $wantSha -and $localSha -eq $wantSha -and (Test-Path -LiteralPath $dist) -and $injectedOk) {
-        Save-InstallState $root $pluginDest
         Set-PluginEnabled $root
         Write-Ok 'plugin ja esta na versao do GitHub'
         Write-Host ''
@@ -743,7 +734,6 @@ function Invoke-Install {
 
     Write-Step 'Ativando o plugin'
     Set-PluginEnabled $root
-    Save-InstallState $root $pluginDest
     Start-Discord
 
     Write-Host ''
@@ -752,11 +742,6 @@ function Invoke-Install {
 }
 
 Show-Banner
-if ($Yes) {
-    $logDir = Join-Path $env:LOCALAPPDATA 'completeDiscordQuest'
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-    try { Start-Transcript -Path (Join-Path $logDir 'update.log') -Append | Out-Null } catch { }
-}
 try {
     Invoke-Install
 } catch {

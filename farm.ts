@@ -28,8 +28,6 @@ export function isClaimable(quest: { userStatus?: { completedAt?: string | null;
     return Boolean(quest.userStatus?.completedAt && !quest.userStatus?.claimedAt);
 }
 
-export type ClaimedEntry = { id: string; name: string; at: string; };
-
 type QuestTasks = Partial<Record<"STREAM_ON_DESKTOP" | "PLAY_ACTIVITY" | "WATCH_VIDEO" | "WATCH_VIDEO_ON_MOBILE" | "PLAY_ON_DESKTOP", unknown>>;
 
 export function getActiveTaskName(quest: {
@@ -70,20 +68,4 @@ export function listVoiceRoomQuests(quests: Array<{
         });
     }
     return out;
-}
-
-export function readClaimedLog(raw: string): ClaimedEntry[] {
-    try {
-        const parsed = JSON.parse(raw || "[]");
-        if (!Array.isArray(parsed)) return [];
-        return parsed.filter(e => e && typeof e.id === "string" && typeof e.name === "string");
-    } catch {
-        return [];
-    }
-}
-
-export function appendClaimedLog(raw: string, entry: ClaimedEntry, max = 20) {
-    const list = readClaimedLog(raw).filter(e => e.id !== entry.id);
-    list.unshift(entry);
-    return JSON.stringify(list.slice(0, max));
 }
