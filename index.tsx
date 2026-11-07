@@ -48,7 +48,7 @@ function isDiscordDesktop() {
 
 export default definePlugin({
     name: "CompleteDiscordQuest",
-    description: "Completa várias missões do Discord ao mesmo tempo, em segundo plano.",
+    description: "v1.0.2 — Completa várias missões do Discord ao mesmo tempo, em segundo plano.",
     authors: [{
         name: "heyash",
         id: 664977206505897984n
@@ -437,7 +437,7 @@ function completeQuest(quest: QuestValue) {
     switch (taskName) {
         case "WATCH_VIDEO":
         case "WATCH_VIDEO_ON_MOBILE":
-            const speed = 7;
+            const speed = 2;
             let completed = false;
             const watchVideo = async () => {
                 while (secondsDone < secondsNeeded) {
@@ -576,7 +576,7 @@ function completeQuest(quest: QuestValue) {
                     const progress = res.body.progress.PLAY_ACTIVITY.value;
                     console.log(`Quest progress ${questName}: ${progress}/${secondsNeeded}`);
 
-                    await new Promise(resolve => setTimeout(resolve, 20 * 1000));
+                    await new Promise(resolve => setTimeout(resolve, 2 * 1000));
 
                     if (!completingQuest.get(quest.id) || progress >= secondsNeeded) {
                         console.log("Stopping completing quest:", questName);

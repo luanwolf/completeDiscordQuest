@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("./farm.ts", import.meta.url), "utf8");
+const index = readFileSync(new URL("./index.tsx", import.meta.url), "utf8");
 assert.match(src, /export const MAX_POST_RETRIES = 8/);
 assert.match(src, /return Math.min\(delay \* 2, max\)/);
 assert.match(src, /return attempts >= max/);
@@ -9,6 +10,9 @@ assert.match(src, /privates\[0\]\?\.id/);
 assert.match(src, /completedAt && !quest\.userStatus\?\.claimedAt/);
 assert.match(src, /listVoiceRoomQuests/);
 assert.match(src, /appendClaimedLog/);
+assert.match(index, /description: "v1\.0\.2 —/);
+assert.match(index, /case "WATCH_VIDEO":[\s\S]*?const speed = 2;/);
+assert.match(index, /case "PLAY_ACTIVITY":[\s\S]*?setTimeout\(resolve, 2 \* 1000\)/);
 
 function nextRetryDelay(delay, max = 300) {
     return Math.min(delay * 2, max);

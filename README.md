@@ -11,6 +11,8 @@
 
 Plugin do Vencord que completa várias missões do Discord ao mesmo tempo, em segundo plano.
 
+Versão: **1.0.2**
+
 Port do plugin de BetterDiscord [CompleteDiscordQuest](https://github.com/nicola02nb/BetterDiscord-Stuff/tree/main/Plugins/CompleteDiscordQuest).
 
 ## Instalação
@@ -59,6 +61,8 @@ Na primeira reinicialização depois de ativar, aparece um aviso de risco. OK li
 - Atualiza sozinho ao abrir o Discord (dá para desligar nas opções do plugin)
 
 Missões de transmitir ainda pedem uma call com outra pessoa e compartilhar qualquer janela. O ícone fica com aviso amarelo enquanto isso.
+
+Vídeo e atividade enviam progresso a cada 2 segundos, o que aumenta o número de chamadas à API e o risco de limites ou penalizações. Jogar e transmitir dependem do intervalo do Discord; a atualização visual também depende do cliente e do servidor.
 
 ## Créditos
 
